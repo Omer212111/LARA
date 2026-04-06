@@ -1,0 +1,4 @@
+Meeting Summary – March 17
+Token Optimization: Resolved token consumption issues by migrating the agent's core model to Gemini 1.5 Flash. This shift allows for more cost-effective testing while maintaining high performance.
+
+Prompt Engineering Research: Conducted in-depth research into Prompt Engineering techniques (such as sub-sequential chain) to refine LARA's logic, improve task autonomy, and further optimize token usage.

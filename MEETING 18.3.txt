@@ -1,0 +1,16 @@
+
+**1. Resource Management**
+* George will attempt to increase the API budget; if unsuccessful, the team will transition to using the college’s computing clusters.
+* **Testing Efficiency:** To conserve tokens and reduce latency, tasks will be downloaded from the environment to run tests locally.
+
+**2. Prompt Engineering & Architecture**
+* **Prompt Strategy:** Shifting from standard instructional prompts to "Prompt Templates" that model a dialogue between the Assistant and User. This demonstrates the desired "Chain of Thought" and self-reasoning behavior.
+* **Context Optimization:** Acknowledged the "lost in the middle" phenomenon, where long prompts cause agents to lose focus on central content.
+
+**3. Agent-Environment Interaction**
+* Defined the communication protocols between the agent and the environment (the "User").
+* Explored **LangChain’s Deep Agents**: Discussed implementing a "wrapper" to configure these agents specifically for the AppWorld environment.
+
+**4. Performance Analysis & Next Steps**
+* **In-depth Debugging:** Focused on identifying the "core" bottlenecks—pinpointing exactly where and why the agent fails.
+* **Benchmarking:** Testing a sample of 20 tasks to calculate the current success rate and categorize common failure points.
