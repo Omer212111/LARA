@@ -11,3 +11,10 @@ __pycache__/
 # IDEs
 .idea/
 .vscode/
+
+# LARA Project Exclusions
+experiments/
+trace_output.json
+*.rar
+*.txt
+dashboard.html

@@ -1,23 +1,25 @@
-# --- להעתיק את הקוד הזה לראש הקובץ tools.py ---
 import json
 from typing import Optional
 from langchain.tools import tool
-import freezegun # <-- התוספת שלנו
+from appworld import AppWorld
 
-# הגנה על ספריות התקשורת מפני קפיאת הזמן של הסימולטור
-freezegun.configure(extend_ignore_list=["google", "httpx", "grpc", "urllib3", "langchain", "langchain_google_genai"])
+# המשתנה שיחזיק את הסביבה שלנו - עכשיו הוא דינאמי
+env: Optional[AppWorld] = None
 
-from appworld import AppWorld, load_task_ids
+def set_appworld_env(new_env: AppWorld):
+    """
+    [TECH LEAD FIX]:
+    Updates the global environment for the tools.
+    This is crucial so the Benchmark script can switch tasks in a loop!
+    """
+    global env
+    env = new_env
+    print(f"\n[SYSTEM] Tools re-wired to new task ID: {env.task.id}")
 
-print("\n[SYSTEM] Booting up REAL AppWorld Simulator Engine...")
-try:
-    real_task_id = load_task_ids("dev")[0]
-    print(f"[SYSTEM] Loading Task ID: {real_task_id}")
-    env = AppWorld(task_id=real_task_id)
-except Exception as e:
-    print(f"\n[ERROR] AppWorld Initialization failed. Error: {e}")
-    env = None
-
+def get_current_task_instruction() -> str:
+    if not env:
+        return "Error: AppWorld environment is offline."
+    return env.task.instruction
 
 @tool
 def system_ping() -> str:

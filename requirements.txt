@@ -2,5 +2,7 @@ appworld
 langchain
 langgraph
 langchain-google-genai
+langchain-openai
 pydantic
 redis
+freezegun
