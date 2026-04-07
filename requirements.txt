@@ -1,8 +1,6 @@
 appworld
+requests
+urllib3
+jinja2
 langchain
-langgraph
-langchain-google-genai
-langchain-openai
-pydantic
-redis
-freezegun
+langchain-core
