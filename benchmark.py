@@ -1,24 +1,26 @@
 import os
 import sys
-
+import time  # Added for metrics tracking
 import freezegun
+
 freezegun.configure(extend_ignore_list=["google", "httpx", "grpc", "urllib3", "langchain", "langchain_google_genai"])
 
 from appworld import AppWorld, load_task_ids
-from agent.planning_loop import process_goal
-from agent.tools import set_appworld_env
+from planning_loop import process_goal
+from tools import set_appworld_env
 
 
-def run_official_benchmark(num_tasks=5, dataset="dev"):
+def run_official_benchmark(num_tasks=20, dataset="train"):  # Updated to 20 tasks
     print(f"========== STARTING OFFICIAL APPWORLD BENCHMARK ({num_tasks} Tasks) ==========")
 
-    # השם תחתיו AppWorld ישמור את הלוגים שלנו (קריטי להערכת ציונים)
     experiment_name = "lara_langchain_agent"
+    results_summary = []
 
     try:
+        # Loading the first 20 tasks as requested
         task_ids = load_task_ids(dataset)[:num_tasks]
     except Exception as e:
-        print(f"[ERROR] Could not load tasks. Ensure AppWorld data is downloaded. {e}")
+        print(f"[ERROR] Could not load tasks: {e}")
         sys.exit(1)
 
     for index, task_id in enumerate(task_ids):
@@ -26,13 +28,11 @@ def run_official_benchmark(num_tasks=5, dataset="dev"):
         print(f"[*] Running Task {index + 1}/{num_tasks} | ID: {task_id}")
         print("=" * 50)
 
-        # שימוש במנהל ההקשר של AppWorld שומר לוגים ומנקה זיכרון אוטומטית!
-        with AppWorld(task_id=task_id, experiment_name=experiment_name) as world:
+        start_time = time.monotonic()  # Start timer for the experiment log
 
-            # חיבור הסביבה החדשה לכלים של LARA (התיקון שלנו משלב 1)
+        with AppWorld(task_id=task_id, experiment_name=experiment_name) as world:
             set_appworld_env(world)
 
-            # [PROMPT ENGINEERING]: הזרקת נתוני ה-Supervisor (כפי שהומלץ במחברת) כדי לחסוך קריאות API
             supervisor = world.task.supervisor
             enriched_instruction = (
                 f"My name is: {supervisor.first_name} {supervisor.last_name}. "
@@ -40,28 +40,35 @@ def run_official_benchmark(num_tasks=5, dataset="dev"):
                 f"Task: {world.task.instruction}"
             )
 
-            print(f"[SYSTEM] Enriched Task Input:\n{enriched_instruction}")
-
             try:
-                # הרצת הלולאה שלנו
-                process_goal(enriched_instruction)
+                # Execution
+                success_flag = process_goal(enriched_instruction)
             except Exception as e:
-                print(f"[BENCHMARK ERROR] Task {task_id} failed abruptly: {e}")
+                print(f"[BENCHMARK ERROR] Task {task_id} failed: {e}")
+                success_flag = False
 
-            if world.task_completed():
-                print(f"\n[SUCCESS] AppWorld registered task {task_id} as COMPLETE!")
-            else:
-                print(f"\n[FAILED] AppWorld registered task {task_id} as INCOMPLETE.")
+            duration = time.monotonic() - start_time # AND HERE
+            is_complete = world.task_completed()
 
-    print("\n========== BENCHMARK COMPLETE ==========")
-    print(f"To see your official accuracy score, run the following command in your terminal:")
-    print(f"appworld evaluate {experiment_name} {dataset}")
+            # Store results for the final summary table
+            results_summary.append({
+                "id": task_id,
+                "status": "✅" if is_complete else "❌",
+                "time": f"{duration:.2f}s"
+            })
+
+            print(f"\n[METRICS] Time: {duration:.2f}s | Result: {'COMPLETE' if is_complete else 'INCOMPLETE'}")
+
+    # Final summary to easily copy-paste into your Google Doc template
+    print("\n" + "=" * 30)
+    print("FINAL EXPERIMENT SUMMARY")
+    print("=" * 30)
+    print("Task ID | Status | Time")
+    for res in results_summary:
+        print(f"{res['id']} | {res['status']} | {res['time']}")
+
+    print("\nTo see official accuracy: appworld evaluate", experiment_name, dataset)
 
 
 if __name__ == "__main__":
-    # שימו לב לבדוק שקיים משתנה סביבה עבור Gemini לפני ההרצה
-    if not os.getenv("GEMINI_API_KEY"):
-        print("[ERROR] GEMINI_API_KEY is missing from .env!")
-        sys.exit(1)
-
-    run_official_benchmark(5, "train")  # מתחילים מ-5 משימות אימון קצרות
+    run_official_benchmark(20, "train")

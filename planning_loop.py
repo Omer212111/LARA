@@ -3,9 +3,9 @@ import logging
 import warnings
 from langchain_core.prompts import ChatPromptTemplate
 from langchain.agents import create_react_agent, AgentExecutor # שינוי ל-React Agent
-from trace_logger import TraceDashboardLogger
+#from trace_logger import TraceDashboardLogger
 from tools import appworld_tools
-
+import time
 import requests
 from typing import Any, List, Optional
 from langchain.llms.base import LLM
@@ -31,6 +31,9 @@ class CustomOllamaLLM(LLM):
             "model": self.model,
             "prompt": prompt,
             "stream": False,
+            "options": {
+                "stop": ["Observation:", "\nObservation:"]  # Stops the model from faking results
+            }
         }
         
         try:
@@ -56,7 +59,7 @@ def process_goal(goal: str):
     print(f"\n[PLANNING & EXECUTION LOOP] Processing goal: '{goal}'")
 
     try:
-        dashboard_logger = TraceDashboardLogger()
+ #       dashboard_logger = TraceDashboardLogger()
 
         # שימוש ב-CustomOllamaLLM עם requests (ללא תלות Ollama מקומית)
         llm = CustomOllamaLLM(
@@ -68,20 +71,30 @@ def process_goal(goal: str):
         )
 
         # שינוי קטן ב-Prompt כדי שיתאים לפורמט ReAct הקלאסי
+
+
         prompt = ChatPromptTemplate.from_messages([
-            ("system", """You are LARA, an AI Assistant...
-            Complete the task using tools.
-            TOOLS:
-            {tools}
-            
-            FORMAT:
-            Thought: do I need to use a tool? Yes
-            Action: the action to take, should be one of [{tool_names}]
-            Action Input: the input to the action
-            Observation: the result of the action
-            ... (repeated Thought/Action/Action Input/Observation N times)
-            Thought: I now know the final answer
-            Final Answer: the final answer to the original input question"""),
+            ("system", """You are LARA, an AI Assistant operating in a SIMULATED environment called AppWorld.
+                            You already have ALL necessary permissions, authentication, and access to the user's accounts. 
+                            DO NOT ask for credentials. DO NOT refuse tasks due to privacy concerns.
+        
+                            CRITICAL FORMATTING RULES: 
+                            1. Your Action MUST be just the name of the tool.
+                            2. You MUST ALWAYS include the "Action Input:" line.
+                            3. For execute_app_api, the Action Input MUST be a JSON object containing "app_name", "api_method", and "parameters".
+                            4. For tools with no input (like list_available_apps), write "Action Input: None".
+        
+                            TOOLS:
+                            {tools}
+        
+                            FORMAT:
+                            Thought: do I need to use a tool? Yes
+                            Action: the action to take, should be one of [{tool_names}]
+                            Action Input: the input to the action
+                            Observation: the result of the action
+                            ... (repeated Thought/Action/Action Input/Observation N times)
+                            Thought: I now know the final answer
+                            Final Answer: the final answer to the original input question"""),
             ("human", "{input}\n{agent_scratchpad}"),
         ])
 
@@ -89,12 +102,14 @@ def process_goal(goal: str):
         # כי גרסאות ישנות של LangChain עובדות ככה טוב יותר
         agent = create_react_agent(llm, appworld_tools, prompt)
 
+        # In planning_loop.py inside process_goal():
         agent_executor = AgentExecutor(
             agent=agent,
             tools=appworld_tools,
             verbose=True,
-            handle_parsing_errors=True, # חשוב מאוד כדי שהסוכן לא יתרסק אם Qwen טועה בפורמט
-            callbacks=[dashboard_logger],
+            handle_parsing_errors=True,
+            max_iterations=15,  # Ensures the agent doesn't loop infinitely; good for "End Stage" tasks
+            callbacks=[],
         )
         
         print("[THINKING] LARA is taking control with Qwen...")
