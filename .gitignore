@@ -1,0 +1,12 @@
+venv/
+__pycache__/
+*.pyc
+*.pyo
+run_log.html
+ollama_responses.log
+trace_output.json
+experiments/
+data/
+*.Zone.Identifier
+~$*
+.env
