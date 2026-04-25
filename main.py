@@ -10,6 +10,7 @@ from config import (
     MAX_PLANNING_ROUNDS,
 )
 import logger
+from reviewer import run_reviewer
 
 # ---------------------------------------------------------------------------
 # TOOLS — loaded once and injected at the start of every session
@@ -17,12 +18,20 @@ import logger
 with open("tools.py", "r") as f:
     CUSTOM_TOOLS_CODE = f.read()
 
+# Names that must survive REPL resets between replan cycles
+_REPL_KEEP = {
+    'apis', 'blackboard', 'Blackboard',
+    'filter_results', 'find_one', 'get_by_id', 'sort_results',
+    'paginate_all', 'filter_apis', 'list_app_apis', 'get_api_doc',
+    'login_to_app', 'call_api', 'get_field', 'find_contact',
+}
+
 # ---------------------------------------------------------------------------
 # RUN CONFIG
 # ---------------------------------------------------------------------------
 dataset_name            = "train"
-experiment_name         = "lara_main_runner"
-max_interactions        = 15
+experiment_name         = "lara_gpt_nano_run"
+max_interactions        = 25
 max_mission_retries     = 2
 max_consecutive_errors  = 3
 
@@ -40,6 +49,12 @@ _RECOVERY_REMINDER = (
     "Your ENTIRE response must be valid Python code. "
     "No English sentences, no reasoning, no markdown. "
     "Write ONE Python statement or function call and stop immediately."
+)
+
+_REREAD_PLAN_REMINDER = (
+    "ERROR occurred. Before writing the next step, re-read your plan:\n"
+    "print(blackboard.plan_text())\n"
+    "Then write the NEXT step according to the plan."
 )
 
 
@@ -68,6 +83,25 @@ def inject_real_apis(raw_error: str, world) -> str | None:
         )
     except Exception:
         return None
+
+
+def _reset_repl(world) -> None:
+    """Delete user-defined REPL variables between replan cycles, keeping tools intact."""
+    keep_repr = repr(_REPL_KEEP)
+    try:
+        world.execute(f"""
+import builtins as _bi
+_keep = set(dir(_bi)) | {keep_repr}
+for _k in list(globals().keys()):
+    if _k not in _keep and not _k.startswith('_'):
+        try:
+            del globals()[_k]
+        except Exception:
+            pass
+""")
+        logger.info("🧹 REPL reset — user variables cleared.")
+    except Exception as e:
+        logger.warning(f"REPL reset failed (non-fatal): {e}")
 
 
 def _run_planner(world, task, feedback: str, cycle: int) -> tuple[str, bool]:
@@ -126,10 +160,10 @@ def _run_planner(world, task, feedback: str, cycle: int) -> tuple[str, bool]:
     return plan_text, plan_complete
 
 
-def _run_executor(world, task, plan_text: str, task_id: str) -> tuple[bool, str]:
+def _run_executor(world, task, plan_text: str, task_id: str) -> tuple[bool, str, str, str]:
     """
     Run the executor with the given plan.
-    Returns (mission_success, last_error).
+    Returns (mission_success, last_error, last_code, last_output).
     last_error is non-empty when the executor failed so the planner can revise.
     """
     logger.output_block(plan_text or "(none)", label="📌 Plan handed to executor")
@@ -139,6 +173,9 @@ def _run_executor(world, task, plan_text: str, task_id: str) -> tuple[bool, str]
     output             = None
     consecutive_errors = 0
     last_error         = ""
+    last_code          = ""
+    last_output        = ""
+    error_count        = 0   # total errors this cycle (for plan re-read trigger)
 
     for step in range(max_interactions):
         code = executor.next_code_block(output)
@@ -152,17 +189,18 @@ def _run_executor(world, task, plan_text: str, task_id: str) -> tuple[bool, str]
             last_error = "Executor got stuck repeating the same code without making progress."
             break
 
+        last_code = code
         label = f"Step {step + 1}"
         logger.code_block(code, label=label)
 
         try:
             output = world.execute(code)
+            last_output = output
             logger.output_block(output, label=label)
 
-            # AppWorld returns execution errors as strings in output, not as exceptions.
-            # Detect and handle "No API named X" errors here.
             if "No API named" in output:
                 last_error = output
+                error_count += 1
                 injected = inject_real_apis(output, world)
                 if injected:
                     output = injected
@@ -172,14 +210,16 @@ def _run_executor(world, task, plan_text: str, task_id: str) -> tuple[bool, str]
                     consecutive_errors += 1
             elif "Execution failed" in output:
                 last_error = output
+                error_count += 1
                 consecutive_errors += 1
                 if consecutive_errors >= max_consecutive_errors:
                     logger.error(
                         f"{max_consecutive_errors} consecutive errors — aborting execution."
                     )
                     break
+                # After 2+ errors, remind executor to re-read the plan
                 if consecutive_errors >= 2:
-                    output = _RECOVERY_REMINDER
+                    output = _REREAD_PLAN_REMINDER
                     consecutive_errors = 0
             else:
                 consecutive_errors = 0
@@ -188,6 +228,8 @@ def _run_executor(world, task, plan_text: str, task_id: str) -> tuple[bool, str]
         except Exception as e:
             raw_error = str(e)
             last_error = raw_error
+            last_output = raw_error
+            error_count += 1
             logger.error(raw_error[:300])
             consecutive_errors += 1
 
@@ -198,7 +240,7 @@ def _run_executor(world, task, plan_text: str, task_id: str) -> tuple[bool, str]
                 break
 
             if consecutive_errors >= 2:
-                output = _RECOVERY_REMINDER
+                output = _REREAD_PLAN_REMINDER
                 consecutive_errors = 0
             else:
                 output = _sanitize_error(raw_error)
@@ -207,10 +249,8 @@ def _run_executor(world, task, plan_text: str, task_id: str) -> tuple[bool, str]
             agent_failed = 'status="fail"' in code or "status='fail'" in code
             if agent_failed:
                 logger.error(f"Task {task_id}: agent gave up (status='fail'). Will retry.")
-                return False, "Agent explicitly called complete_task(status='fail')."
+                return False, "Agent explicitly called complete_task(status='fail').", last_code, last_output
 
-            # Verify correctness — task_completed() only means complete_task() was called,
-            # not that the answer was right. evaluate() runs the actual test suite.
             eval_result = world.evaluate()
             passed = eval_result.pass_count
             total  = eval_result.total_count
@@ -220,21 +260,22 @@ def _run_executor(world, task, plan_text: str, task_id: str) -> tuple[bool, str]
                     f"Task {task_id} completed correctly! "
                     f"({passed}/{total} tests passed, {pct:.0f}%)"
                 )
-                return True, ""
+                return True, "", last_code, last_output
             else:
-                fail_reqs = [f['requirement'] for f in eval_result.failures[:3]]
+                fail_reqs = [f['requirement'] for f in eval_result.failures[:5]]
                 logger.error(
                     f"Task {task_id}: complete_task() called but evaluation FAILED "
                     f"({passed}/{total} tests passed, {pct:.0f}%). "
                     f"Failed: {fail_reqs}"
                 )
-                return False, (
+                wrong_answer_error = (
                     f"complete_task() was called but the answer was wrong. "
                     f"{passed}/{total} tests passed ({pct:.0f}%). "
                     f"Failed requirements: {fail_reqs}"
                 )
+                return False, wrong_answer_error, last_code, last_output
 
-    return False, last_error
+    return False, last_error, last_code, last_output
 
 
 # ---------------------------------------------------------------------------
@@ -242,13 +283,13 @@ def _run_executor(world, task, plan_text: str, task_id: str) -> tuple[bool, str]
 # ---------------------------------------------------------------------------
 task_ids = load_task_ids(dataset_name)
 
-for index, task_id in enumerate(task_ids[1:5]):
+for index, task_id in enumerate(task_ids[:20]):
     logger.task_header(task_id, index + 1, len(task_ids))
     mission_success = False
 
     for attempt in range(1, max_mission_retries + 1):
         logger.attempt(attempt, max_mission_retries)
-        
+
         try:
             with AppWorld(task_id=task_id, experiment_name=experiment_name) as world:
 
@@ -272,8 +313,12 @@ for index, task_id in enumerate(task_ids[1:5]):
                         logger.warning("Planner did not produce a complete plan — skipping execution.")
                         break
 
+                    # Reset REPL between cycles so stale variables don't pollute the new plan
+                    if cycle > 0:
+                        _reset_repl(world)
+
                     # --- EXECUTION ---
-                    mission_success, last_error = _run_executor(
+                    mission_success, last_error, last_code, last_output = _run_executor(
                         world, world.task, plan_text, task_id
                     )
 
@@ -281,11 +326,25 @@ for index, task_id in enumerate(task_ids[1:5]):
                         break
 
                     if cycle < MAX_PLANNING_ROUNDS - 1:
-                        # Collect what was done for planner feedback
+                        # Collect completed steps
                         try:
                             done_steps = world.execute("print(blackboard.completed_steps)").strip()
                         except Exception:
                             done_steps = "unknown"
+
+                        # Run reviewer if the answer was wrong (not a code crash)
+                        reviewer_diagnosis = ""
+                        if "answer was wrong" in last_error or "Failed requirements" in last_error:
+                            logger.phase("🔎 Running Code Reviewer")
+                            fail_reqs = re.findall(r"'([^']+)'", last_error)
+                            reviewer_diagnosis = run_reviewer(
+                                task=world.task.instruction,
+                                last_code=last_code,
+                                last_output=last_output,
+                                eval_failures=fail_reqs,
+                            )
+                            if reviewer_diagnosis:
+                                logger.output_block(reviewer_diagnosis, label="🔎 Reviewer Diagnosis")
 
                         # Build specific guidance based on error type
                         api_err = re.search(
@@ -295,11 +354,13 @@ for index, task_id in enumerate(task_ids[1:5]):
                             wrong_api, app = api_err.group(1), api_err.group(2)
                             error_guidance = (
                                 f"The executor called '{wrong_api}' in the {app} app, which does not exist.\n"
-                                f"The revised plan MUST add a step at the point of failure that says:\n"
-                                f"  \"Call show_api_descriptions('{app}') to get the real API names, "
-                                f"then use the correct API to [describe what data is needed].\"\n"
-                                f"Do NOT assume any {app} API names — let the executor look them up first."
+                                f"The revised plan MUST add a step: "
+                                f"\"Call list_app_apis('{app}') to find the correct API name, "
+                                f"then call get_api_doc('{app}', <correct_name>) to verify parameters.\"\n"
+                                f"Do NOT assume any {app} API names."
                             )
+                        elif reviewer_diagnosis:
+                            error_guidance = reviewer_diagnosis
                         elif last_error:
                             error_guidance = last_error[:400]
                         else:
@@ -308,7 +369,7 @@ for index, task_id in enumerate(task_ids[1:5]):
                         planner_feedback = (
                             f"Execution cycle {cycle + 1} failed.\n"
                             f"Steps completed before failure: {done_steps}\n"
-                            f"Error: {error_guidance}\n\n"
+                            f"Error/Diagnosis:\n{error_guidance}\n\n"
                             f"Write a corrected plan. Continue from where the executor left off — "
                             f"do not repeat already-completed steps."
                         )

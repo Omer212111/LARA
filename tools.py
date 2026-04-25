@@ -31,14 +31,61 @@ def get_by_id(data: list, id_key: str, id_value) -> dict | None:
     return None
 
 
-def sort_results(data: list, key: str, reverse: bool = False) -> list:
+def sort_results(data: list, key, reverse: bool = False) -> list:
     """
     Sorts a list of dicts by key. Returns a new sorted list.
-    Example: sorted_emails = sort_results(emails, 'date', reverse=True)
+    key can be a string field name OR a callable (lambda).
+    Example (string):   sort_results(emails, 'date', reverse=True)
+    Example (callable): sort_results(songs, lambda x: x.get('like_count', 0), reverse=True)
     """
     if not isinstance(data, list):
         raise TypeError(f"sort_results expects a list, got {type(data).__name__}")
+    if callable(key):
+        return sorted(data, key=key, reverse=reverse)
     return sorted(data, key=lambda x: x.get(key) or "", reverse=reverse)
+
+
+def list_app_apis(app_name: str) -> list:
+    """
+    Returns all available API names and short descriptions for an app.
+
+    Use this when:
+      - You don't know which API to call for a given action.
+      - You got 'No API named X found' — call this to see the real names.
+
+    Example: list_app_apis('spotify')
+    → [{"name": "show_playlist_library", "description": "..."}, ...]
+    """
+    return apis.api_docs.show_api_descriptions(app_name=app_name)
+
+
+def get_api_doc(app_name: str, api_name: str) -> dict:
+    """
+    Returns the FULL specification for a specific API:
+    exact parameter names, types, required/optional, and response field names.
+
+    Use this BEFORE calling any API you haven't verified yet — it tells you:
+      - Which parameter names to pass (e.g. 'playlist_id', not 'id')
+      - What fields the response contains (e.g. 'song_id', not 'id')
+
+    If the api_name doesn't exist, automatically falls back to list_app_apis()
+    so you can pick the correct name.
+
+    Example: get_api_doc('spotify', 'show_playlist_library')
+    """
+    try:
+        return apis.api_docs.show_api_doc(app_name=app_name, api_name=api_name)
+    except Exception as e:
+        # API name is wrong — return the real list so the caller can pick correctly
+        try:
+            available = list_app_apis(app_name)
+            return {
+                "error": f"No API named '{api_name}' in '{app_name}'.",
+                "hint": "Choose the correct name from 'available_apis' below.",
+                "available_apis": available,
+            }
+        except Exception:
+            return {"error": str(e)}
 
 
 class Blackboard:
@@ -141,3 +188,65 @@ def paginate_all(api_fn, page_size: int = 20,
             break
         page += 1
     return results
+
+
+# ── High-level helpers (reduce boilerplate in executor code) ──────────────────
+
+def login_to_app(app_name: str) -> str:
+    """
+    Login to any AppWorld app in one call. Returns access_token.
+    Handles supervisor email lookup + credential lookup + login automatically.
+    Example: token = login_to_app('spotify')
+    """
+    email = apis.supervisor.show_profile()['email']
+    accounts = apis.supervisor.show_account_passwords()
+    cred = find_one(accounts, 'account_name', app_name)
+    if not cred:
+        raise ValueError(f"No credentials found for app '{app_name}'")
+    result = getattr(apis, app_name).login(username=email, password=cred['password'])
+    return result['access_token']
+
+
+def call_api(app_name: str, api_name: str, token: str, **kwargs):
+    """
+    Call any AppWorld API with access_token injected automatically.
+    Works for both read and write/update operations.
+    Example: songs  = call_api('spotify', 'show_liked_songs', token)
+    Example: call_api('spotify', 'rate_song', token, song_id=123, rating=5)
+    """
+    func = getattr(getattr(apis, app_name), api_name)
+    return func(access_token=token, **kwargs)
+
+
+def get_field(data: list, match_key: str, match_value, return_key: str, default=None):
+    """
+    From a list of dicts, return return_key of the first item where item[match_key] == match_value.
+    Returns default if not found.
+    Example: song_id = get_field(songs, 'title', 'Silver Lining', 'song_id')
+    """
+    for item in data:
+        if item.get(match_key) == match_value:
+            return item.get(return_key, default)
+    return default
+
+
+def find_contact(name: str) -> dict | None:
+    """
+    Look up a person by name in the phone app contacts.
+    Use for roommates, coworkers, friends, siblings — any relationship-based lookup.
+    Returns the full contact dict (has 'email', 'phone_number', etc.) or None.
+    Example: contact = find_contact('Alice')
+             email   = contact['email']
+    """
+    token = login_to_app('phone')
+    try:
+        results = apis.phone.search_contacts(access_token=token, query=name)
+        if results:
+            return results[0]
+    except Exception:
+        pass
+    all_contacts = apis.phone.show_contacts(access_token=token)
+    name_lower = name.lower()
+    matches = [c for c in all_contacts
+               if name_lower in str(c.get('name') or c.get('full_name') or '').lower()]
+    return matches[0] if matches else None
