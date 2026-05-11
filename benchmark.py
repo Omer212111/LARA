@@ -1,67 +1,101 @@
-import os
 import sys
-
+import time
 import freezegun
+
 freezegun.configure(extend_ignore_list=["google", "httpx", "grpc", "urllib3", "langchain", "langchain_google_genai"])
 
 from appworld import AppWorld, load_task_ids
-from agent.planning_loop import process_goal
-from agent.tools import set_appworld_env
+from planning_loop import process_goal
+from tools import set_appworld_env
+import logger
 
 
-def run_official_benchmark(num_tasks=5, dataset="dev"):
-    print(f"========== STARTING OFFICIAL APPWORLD BENCHMARK ({num_tasks} Tasks) ==========")
-
-    # השם תחתיו AppWorld ישמור את הלוגים שלנו (קריטי להערכת ציונים)
+def run_official_benchmark(num_tasks=5, dataset="train", start=0):
     experiment_name = "lara_langchain_agent"
+    results_summary = []
 
     try:
-        task_ids = load_task_ids(dataset)[:num_tasks]
+        task_ids = load_task_ids(dataset)[start:start + num_tasks]
     except Exception as e:
-        print(f"[ERROR] Could not load tasks. Ensure AppWorld data is downloaded. {e}")
+        logger.error(f"Could not load tasks: {e}")
         sys.exit(1)
 
     for index, task_id in enumerate(task_ids):
-        print(f"\n" + "=" * 50)
-        print(f"[*] Running Task {index + 1}/{num_tasks} | ID: {task_id}")
-        print("=" * 50)
+        logger.task_header(task_id, index + 1, num_tasks)
+        start_time = time.monotonic()
 
-        # שימוש במנהל ההקשר של AppWorld שומר לוגים ומנקה זיכרון אוטומטית!
         with AppWorld(task_id=task_id, experiment_name=experiment_name) as world:
-
-            # חיבור הסביבה החדשה לכלים של LARA (התיקון שלנו משלב 1)
             set_appworld_env(world)
 
-            # [PROMPT ENGINEERING]: הזרקת נתוני ה-Supervisor (כפי שהומלץ במחברת) כדי לחסוך קריאות API
             supervisor = world.task.supervisor
             enriched_instruction = (
                 f"My name is: {supervisor.first_name} {supervisor.last_name}. "
                 f"My personal email is {supervisor.email} and phone number is {supervisor.phone_number}.\n\n"
                 f"Task: {world.task.instruction}"
             )
-
-            print(f"[SYSTEM] Enriched Task Input:\n{enriched_instruction}")
+            logger.task_instruction(world.task.instruction)
 
             try:
-                # הרצת הלולאה שלנו
-                process_goal(enriched_instruction)
+                process_goal(enriched_instruction, task_id=task_id)
             except Exception as e:
-                print(f"[BENCHMARK ERROR] Task {task_id} failed abruptly: {e}")
+                logger.error(f"Task {task_id} crashed: {e}")
 
+            duration = time.monotonic() - start_time
+
+            # Use world.evaluate() — same as the official appworld evaluate command
             if world.task_completed():
-                print(f"\n[SUCCESS] AppWorld registered task {task_id} as COMPLETE!")
-            else:
-                print(f"\n[FAILED] AppWorld registered task {task_id} as INCOMPLETE.")
+                eval_result = world.evaluate()
+                passed = eval_result.pass_count
+                total = eval_result.total_count
+                pct = eval_result.pass_percentage
+                correct = eval_result.success
 
-    print("\n========== BENCHMARK COMPLETE ==========")
-    print(f"To see your official accuracy score, run the following command in your terminal:")
-    print(f"appworld evaluate {experiment_name} {dataset}")
+                if correct:
+                    logger.success(
+                        f"Task {task_id} CORRECT — {passed}/{total} tests passed ({pct:.0f}%) | {duration:.1f}s"
+                    )
+                else:
+                    fail_reqs = [f['requirement'] for f in eval_result.failures[:3]]
+                    logger.error(
+                        f"Task {task_id} WRONG — {passed}/{total} tests passed ({pct:.0f}%) | "
+                        f"Failed: {fail_reqs} | {duration:.1f}s"
+                    )
+            else:
+                correct = False
+                passed, total, pct = 0, "?", 0
+                logger.warning(f"Task {task_id} — complete_task() never called | {duration:.1f}s")
+
+            results_summary.append({
+                "id": task_id,
+                "correct": correct,
+                "passed": passed,
+                "total": total,
+                "pct": pct,
+                "time": f"{duration:.1f}s",
+            })
+
+        logger.separator()
+
+    # Final summary
+    total_correct = sum(1 for r in results_summary if r["correct"])
+    print("\n" + "=" * 50)
+    print(f"BENCHMARK COMPLETE — {total_correct}/{num_tasks} tasks correct")
+    print("=" * 50)
+    print(f"{'Task ID':<20} {'Result':<10} {'Tests':<12} {'Time'}")
+    for r in results_summary:
+        status = "✅ CORRECT" if r["correct"] else "❌ WRONG"
+        tests = f"{r['passed']}/{r['total']} ({r['pct']:.0f}%)" if r["total"] != "?" else "not called"
+        print(f"{r['id']:<20} {status:<10} {tests:<12} {r['time']}")
+
+    print(f"\nOfficial score: appworld evaluate {experiment_name} {dataset}")
+    logger.done()
 
 
 if __name__ == "__main__":
-    # שימו לב לבדוק שקיים משתנה סביבה עבור Gemini לפני ההרצה
-    if not os.getenv("GEMINI_API_KEY"):
-        print("[ERROR] GEMINI_API_KEY is missing from .env!")
-        sys.exit(1)
-
-    run_official_benchmark(5, "train")  # מתחילים מ-5 משימות אימון קצרות
+    # Usage:  python benchmark.py [num_tasks] [start]
+    #   python benchmark.py            → 20 tasks from start (0)
+    #   python benchmark.py 5          → first 5 tasks
+    #   python benchmark.py 2 18       → 2 tasks starting at index 18 (i.e. tasks 19, 20)
+    num   = int(sys.argv[1]) if len(sys.argv) > 1 else 20
+    start = int(sys.argv[2]) if len(sys.argv) > 2 else 0
+    run_official_benchmark(num, "train", start=start)

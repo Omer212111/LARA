@@ -1,89 +1,118 @@
-from langchain.agents import create_react_agent, AgentExecutor
-from langchain.memory import ConversationSummaryBufferMemory
-from langchain_core.prompts import PromptTemplate
-from tools import appworld_tools
-from custom_models import CustomChatOllama
+"""
+LARA MAS v2.2 — Orchestrator
+Builds the LangGraph StateGraph and runs the multi-agent flow.
+
+Agent logic is split across:
+  explorer.py        — Explorer node  (GPT-4.1-nano, OpenAI native function calling)
+  executor.py        — Executor node  (Qwen via Ollama)
+  supervisor.py      — Supervisor node (routing decisions)
+  reviewer.py        — Code Reviewer node (GPT-4.1-nano, triggers on wrong answer)
+  executor_helpers.py — Bootstrap helpers prepended to every Executor code block
+  prompts.py         — All system prompts
+  llms.py            — LLM wrappers + .env loading
+  config.py          — Runtime constants (limits, model names, URLs)
+  state.py           — AgentState TypedDict
+"""
+
+from langchain_core.messages import HumanMessage
+from langgraph.graph import END, StateGraph
+
+import logger
+from config import MAX_EXECUTOR_RUNS, MAX_ITERATIONS
+from explorer import explorer_node
+from executor import executor_node
+from reviewer import reviewer_node
+from state import AgentState
+from supervisor import supervisor_node
 
 
-# הפרומפט חייב להכיל בדיוק את המשתנים שcreate_react_agent מצפה להם:
-#   {tools}            — תיאור הכלים (מולא אוטומטית)
-#   {tool_names}       — שמות הכלים בלבד (מולא אוטומטית)
-#   {input}            — המשימה (מולא דרך invoke)
-#   {chat_history}     — היסטוריית זיכרון (מולא מה-memory)
-#   {agent_scratchpad} — מחרוזת ה-Thought/Action/Observation (מולא אוטומטית)
-#
-# input_variables חייב להיות מוצהר במפורש כי from_template לא תמיד מזהה את כולם
-REACT_PROMPT = PromptTemplate(
-    input_variables=["tools", "tool_names", "input", "chat_history", "agent_scratchpad"],
-    template="""You are a super intelligent AI Assistant for AppWorld.
-Your job is to complete tasks autonomously by calling APIs through the provided tools.
+def _after_executor(state: AgentState) -> str:
+    """
+    Routing function called after every Executor run.
+    Normal path: go to Supervisor.
+    Exception: if complete_task() was called but the answer was WRONG,
+               the Reviewer hasn't run yet this attempt,
+               AND there is still an executor run left for the retry → send to Reviewer.
 
-TOOLS AVAILABLE:
-{tools}
+    The MAX_EXECUTOR_RUNS check here is critical: the Reviewer→Executor edge bypasses
+    the Supervisor, so without this check the limit would never fire on wrong-answer paths.
+    """
+    eval_failure  = state.get("last_eval_failure", "")
+    reviewer_ran  = state.get("reviewer_ran", False)
+    had_code_error = bool(state.get("last_error", ""))
+    executor_runs = state.get("executor_runs", 0)
 
-### RULES:
-1. Always reason as Python comments (#).
-2. Never ask for clarification — decide autonomously.
-3. One Action per step. Wait for Observation before next Action.
-4. When done, call execute_app_api with supervisor.complete_task.
-5. To get available apps: use list_available_apps.
-6. To explore an app's APIs: use explore_app_apis.
-7. To read a specific API spec: use get_api_spec.
-8. To call any API: use execute_app_api.
-
-### FORMAT — follow exactly:
-Thought: <your reasoning>
-Action: <one of [{tool_names}]>
-Action Input: <json>
-Observation: <filled by environment>
-... (repeat)
-Thought: <done>
-Action: execute_app_api
-Action Input: {{"app_name": "supervisor", "api_method": "complete_task", "parameters": {{"answer": "<answer>"}}}}
-
-### TASK:
-{input}
-
-### HISTORY:
-{chat_history}
-
-{agent_scratchpad}"""
-)
+    wrong_answer = bool(eval_failure) and not had_code_error
+    if wrong_answer and not reviewer_ran and executor_runs < MAX_EXECUTOR_RUNS:
+        return "Reviewer"
+    return "Supervisor"
 
 
-def process_goal(goal: str) -> bool:
+def process_goal(goal: str, task_id: str = "") -> bool:
+    """
+    Run the full MAS flow for a single task.
+    Returns True if world.evaluate() confirms the task was solved correctly.
+    """
+    logger.phase("🚀 LARA MAS v2.2 — Starting multi-agent flow")
+
+    workflow = StateGraph(AgentState)
+    workflow.add_node("Supervisor", supervisor_node)
+    workflow.add_node("Explorer",   explorer_node)
+    workflow.add_node("Executor",   executor_node)
+    workflow.add_node("Reviewer",   reviewer_node)
+
+    workflow.add_edge("Explorer",  "Supervisor")
+    workflow.add_edge("Reviewer",  "Executor")    # Reviewer → Executor (retry with diagnosis)
+
+    workflow.add_conditional_edges(
+        "Executor",
+        _after_executor,
+        {"Supervisor": "Supervisor", "Reviewer": "Reviewer"},
+    )
+    workflow.add_conditional_edges(
+        "Supervisor",
+        lambda s: s["next_agent"],
+        {"Explorer": "Explorer", "Executor": "Executor", "FINISH": END},
+    )
+
+    workflow.set_entry_point("Supervisor")
+    app = workflow.compile()
+
+    initial_state: AgentState = {
+        "messages":             [HumanMessage(content=goal)],
+        "plan":                 "",
+        "findings":             {},
+        "iterations":           0,
+        "explorer_runs":        0,
+        "executor_runs":        0,
+        "last_error":           "",
+        "reviewer_diagnosis":   "",
+        "task_signal_complete": False,
+        "final_answer":         "",
+        "next_agent":           "",
+        "last_code":            "",
+        "last_eval_failure":    "",
+        "reviewer_ran":         False,
+    }
+
     try:
-        # 1. אתחול המודל
-        llm = CustomChatOllama()
+        # recursion_limit must be > MAX_ITERATIONS to avoid LangGraph cutting us off
+        # before our own limits fire. Set to 2× MAX_ITERATIONS as a safe ceiling.
+        final_state = app.invoke(initial_state, config={"recursion_limit": MAX_ITERATIONS * 2})
+        answer  = final_state.get("final_answer", "")
+        success = bool(final_state.get("task_signal_complete"))
 
-        # 2. זיכרון — return_messages=False מחזיר string ולא list (נדרש לפרומפט שלנו)
-        memory = ConversationSummaryBufferMemory(
-            llm=llm,
-            max_token_limit=2000,
-            memory_key="chat_history",
-            return_messages=False
+        summary = (
+            f"final_answer={answer!r}  |  "
+            f"task_signal_complete={final_state.get('task_signal_complete')}  |  "
+            f"executor_runs={final_state.get('executor_runs')}"
         )
+        if success:
+            logger.success(f"Flow finished — task complete. {summary}")
+        else:
+            logger.warning(f"Flow finished — task NOT signalled complete. {summary}")
 
-        # 3. יצירת הסוכן
-        agent = create_react_agent(llm, appworld_tools, REACT_PROMPT)
-
-        agent_executor = AgentExecutor(
-            agent=agent,
-            tools=appworld_tools,
-            memory=memory,
-            verbose=True,
-            handle_parsing_errors=True,
-            max_iterations=50
-        )
-
-        print(f"\n[LARA] Starting task: {goal}")
-
-        # FIX: רק "input" נדרש כאן — LangChain ממלא את השאר (tools, tool_names, agent_scratchpad)
-        agent_executor.invoke({"input": goal})
-        return True
-
+        return success
     except Exception as e:
-        print(f"❌ Critical Error in process_goal: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.error(f"Flow crashed: {e}")
         return False

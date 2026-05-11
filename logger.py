@@ -12,7 +12,7 @@ _HTML_HEADER = """\
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta http-equiv="refresh" content="2">
+<meta http-equiv="refresh" content="5">
 <title>LARA Agent Log</title>
 <style>
   * { box-sizing: border-box; }

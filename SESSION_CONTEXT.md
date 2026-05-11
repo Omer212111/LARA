@@ -2,321 +2,241 @@
 
 ## What is this project?
 
-**LARA** is an AI agent system that solves tasks on the **AppWorld benchmark** — a simulated environment of 11 apps (Spotify, Gmail, Amazon, Venmo, Splitwise, Todoist, SimpleNote, Phone, FileSystem, Supervisor, API Docs). The agent interacts with these apps by writing Python code that calls their REST-style APIs through a Python REPL. AppWorld executes each code snippet and returns the output.
+**LARA** is an AI agent system that solves tasks on the **AppWorld benchmark** — a simulated environment of 11 apps (Spotify, Gmail, Amazon, Venmo, Splitwise, Todoist, simple_note, Phone, file_system, Supervisor, API Docs). The agent interacts with these apps by writing Python code that calls their REST-style APIs through a Python REPL.
 
-The LLM backend is **GPT-4.1-nano** (OpenAI), called via the OpenAI Python SDK. The project is in `/home/omer2/LARA_project` on WSL (Ubuntu on Windows).
-
-> **Note:** There is a second (older) implementation at `/home/omer2/LARA_project/LARA-MAS/LARA/` — a LangGraph multi-agent system with Explorer → Executor → Supervisor nodes. The root project (`/home/omer2/LARA_project/`) uses the simpler Planner → Executor pipeline and is the one actively being benchmarked.
+**Active codebase:** `/home/omer2/LARA_project/LARA-MAS/LARA/` (MAS v2.3)
+**Virtual environment:** `/home/omer2/LARA_project/.venv/`
+**Platform:** WSL (Ubuntu on Windows)
+**Last updated:** 2026-05-11
 
 ---
 
-## File structure
+## LLM Backends
+
+| Agent | Model | Endpoint |
+|-------|-------|----------|
+| Explorer | **GPT-4.1-nano** (OpenAI) | `api.openai.com` |
+| Executor | **GPT-4.1-nano** (OpenAI) — switchable to Qwen | `api.openai.com` or `https://192.116.98.6/api/chat` |
+| Supervisor | **qwen2.5-coder:latest** (Ollama) | `https://192.116.98.6/api/generate` |
+| Reviewer | **qwen2.5-coder:latest** (Ollama) | `https://192.116.98.6/api/generate` |
+
+**Backend abstraction:** `EXECUTOR_BACKEND` in `config.py` toggles the Executor between OpenAI (`"openai"`) and Ollama (`"ollama"`) with a single line. Currently set to `"openai"`.
+
+OpenAI API key is stored in `LARA-MAS/LARA/.env` (gitignored).
+
+---
+
+## File Structure
 
 | File | Role |
 |------|------|
-| `main.py` | Outer loop: loads tasks, runs planner → executor pipeline, retries |
-| `agent.py` | `BaseAgent`, `PlannerAgent`, `ExecutorAgent` |
-| `llm_client.py` | OpenAI API calls with retries + prose detection (`_looks_like_python`) |
-| `prompts.py` | `PLANNER_PROMPT_TEMPLATE` + `PROMPT_TEMPLATE` (executor) |
-| `tools.py` | Python helpers injected into the AppWorld REPL (see Tools section below) |
-| `config.py` | All constants: model, `MAX_PLAN_STEPS=7`, `MAX_PLANNING_ROUNDS=3`, etc. |
-| `logger.py` | Writes `run_log.html` — open in browser, auto-refreshes every 2s |
-| `.env` | `OPENAI_API_KEY=...` |
+| `main.py` | Entry point: loads one task, runs `process_goal()`, calls `world.evaluate()` for real correctness |
+| `benchmark.py` | Batch runner. Usage: `python benchmark.py [num_tasks] [start]` (e.g. `python benchmark.py 2 18` runs tasks 19-20) |
+| `planning_loop.py` | LangGraph orchestrator: builds StateGraph with 4 nodes (Supervisor → Explorer → Executor → Reviewer) |
+| `config.py` | Constants: `MAX_ITERATIONS=12`, `MAX_EXECUTOR_RUNS=2`, `MAX_REACT_STEPS=10`, `EXECUTOR_BACKEND`, model names, Ollama URLs/auth |
+| `state.py` | `AgentState` TypedDict — all shared state fields |
+| `llms.py` | LLM wrappers: `CustomOllamaLLM` (with retry), `OpenAILLM`, factory functions |
+| `prompts.py` | All prompt strings: `build_explorer_system()`, `EXPLORER_TOOLS_OPENAI`, `REACT_EXECUTOR_SYSTEM`, `build_react_initial_message()` |
+| `explorer.py` | Explorer agent (OpenAI native function calling), `_detect_apps()`, `_call_gpt_explorer()` |
+| `executor.py` | **ReAct Executor agent**: `_llm_call()` dispatcher (openai/ollama), `executor_node()` runs ReAct loop |
+| `executor_helpers.py` | `BOOTSTRAP_CODE` injected into every Executor code block: `login_to_app`, `call_api`, `fetch_all`, `filter_results`, `get_field`, `sort_by`, `find_contact` |
+| `reviewer.py` | Reviewer agent: diagnoses wrong-answer attempts; produces ROOT_CAUSE / EVIDENCE / FIX_INSTRUCTION |
+| `supervisor.py` | Supervisor agent: routing decisions between Explorer / Executor / Reviewer / FINISH |
+| `tools.py` | LangChain `@tool` definitions + `evaluate_task()` helper that calls `world.evaluate()` |
+| `logger.py` | Writes `run_log.html` (auto-refreshes every 5s) — open with `explorer.exe run_log.html` |
+| `.env` | `OPENAI_API_KEY=...` (never commit) |
 
 ---
 
-## Architecture: Planner → Executor pipeline
+## Architecture: MAS v2.3 (Supervisor → Explorer → ReAct Executor → Reviewer)
 
 ```
-main.py
-  ├─ For each cycle (up to MAX_PLANNING_ROUNDS=3):
+process_goal(task)
   │
-  │   PHASE 1: PlannerAgent (up to MAX_PLAN_STEPS=7 steps)
-  │     • Writes a HIGH-LEVEL plain-English strategy — no API calls, no code
-  │     • On cycle > 0: receives executor failure feedback (error + completed steps)
-  │       and writes a REVISED plan that continues from where execution stopped
-  │     • Final step: blackboard.set_plan([...], status="complete") + print(blackboard)
-  │     • Blackboard is reset at the start of each planning cycle
+  ├─ StateGraph (LangGraph) with 4 nodes:
   │
-  │   PHASE 2: ExecutorAgent (up to max_interactions=25 steps)
-  │     • Receives the plan from blackboard.plan_text()
-  │     • Discovers APIs using list_app_apis() + get_api_doc() before every new call
-  │     • Marks steps done: blackboard.mark_done(N)
-  │     • main.py auto-injects real API list when "No API named X" error appears
-  │     • Has consecutive_errors guard (aborts after 3 straight failures)
-  │     • Has is_stuck() detection (breaks on 3× same normalized code)
+  │   SUPERVISOR (Qwen) — routing decisions
+  │     • Checks state: has_plan? task_done? last_error? executor_runs?
+  │     • Routes to: Explorer | Executor | Reviewer | FINISH
+  │     • Hard limits: MAX_ITERATIONS=12, MAX_EXECUTOR_RUNS=2
+  │     • If Ollama returns "Error:..." → defaults to Executor (skips wasted Explorer run)
   │
-  │   If execution fails → collect (completed_steps, last_error)
-  │     → build planner_feedback string → start next cycle
+  │   EXPLORER (GPT-4.1-nano) — discovery only, NO code execution
+  │     • Uses OpenAI native function calling (NOT LangChain ReAct)
+  │     • tool_choice="required" on round 0 → model MUST call at least one tool
+  │     • Pre-injects explore_app_apis results for detected apps into system prompt
+  │     • Tools: explore_app_apis, get_api_details
+  │     • Hard cap of 9 total tool calls — after that, forced plan generation
+  │     • Force-plan injects OUTPUT FORMAT reminder so the plan is always structured
+  │     • Writes a plan with APP / REASONING (Scope, Metric, Ambiguities) / PLAN sections
+  │     • On re-run: receives last_error / reviewer_diagnosis, refines the plan
   │
-  └─ Retry: up to max_mission_retries=2 full attempts per task
+  │   EXECUTOR (GPT-4.1-nano via ReAct loop) — writes and runs Python code STEP BY STEP
+  │     • System prompt: REACT_EXECUTOR_SYSTEM with helper functions, IMPORTANT FACTS, format rules
+  │     • Loop up to MAX_REACT_STEPS=10 iterations:
+  │         1. LLM writes Thought + small ```python``` code block
+  │         2. Code runs in AppWorld REPL with BOOTSTRAP_CODE prepended
+  │         3. Output fed back as Observation in next user message
+  │         4. evaluate_task() checked after each step
+  │     • Each code block is SELF-CONTAINED (re-login, re-fetch each step)
+  │     • Calls apis.supervisor.complete_task(answer=...) when done
+  │
+  │   REVIEWER (Qwen) — diagnoses wrong answers
+  │     • Triggered when complete_task() called but world.evaluate() failed
+  │     • Outputs structured diagnosis: ROOT_CAUSE / EVIDENCE / EXPLANATION / FIX_INSTRUCTION
+  │     • Diagnosis fed to Executor's next attempt via reviewer_diagnosis state field
+  │
+  └─ After each Executor run: evaluate_task() calls world.evaluate()
+       task_signal_complete = True only if world.evaluate().success == True
 ```
 
-### Agent class hierarchy
-
-```
-BaseAgent
-  ├─ PlannerAgent   — uses PLANNER_PROMPT_TEMPLATE
-  └─ ExecutorAgent  — uses PROMPT_TEMPLATE with plan= injected
-```
-
-`BaseAgent._normalize_code()` strips comment-only lines before stuck detection.
+### Key state fields (AgentState TypedDict)
+- `messages` — conversation history
+- `plan` — Explorer's latest plan text
+- `findings` — dict `{attempt_N: result}` across Executor runs
+- `last_error` — last Executor crash text (fed back to Explorer/Executor)
+- `reviewer_diagnosis` — structured wrong-answer diagnosis from Reviewer
+- `task_signal_complete` — True only if world.evaluate() passes
+- `executor_runs` / `explorer_runs` / `iterations` — counters
+- `last_code` / `last_eval_failure` — fed to Reviewer for diagnosis
 
 ---
 
-## Tools injected into the AppWorld REPL (`tools.py`)
+## Critical correctness fix
 
-All of the following are available as globals in every executor code block:
+**`world.task_completed()` ≠ correct answer.**
+`task_completed()` only checks that `complete_task()` was called. `world.evaluate()` runs the actual AppWorld test suite.
 
-### API Discovery (MANDATORY — use before every new API call)
-
+All evaluation goes through `evaluate_task()` in `tools.py`:
 ```python
-list_app_apis(app_name)          # → list of {name, description}
-                                  #   Use when unsure which API to call
-get_api_doc(app_name, api_name)  # → full spec: params + response field names
-                                  #   Use BEFORE calling any API to know exact names
-                                  #   If api_name is wrong, auto-falls back to list_app_apis()
+result = env.evaluate()
+return {"correct": result.success, "pass_count": ..., "failures": ...}
 ```
 
-### Searching & Filtering
-
-```python
-filter_results(data, key, value)    # all items where key contains value (case-insensitive)
-find_one(data, key, value)          # first matching item, or None
-get_by_id(data, id_key, id_value)   # exact ID match
-```
-
-### Sorting
-
-```python
-sort_results(data, key, reverse=False)
-# key = string field name OR a lambda
-# Example (string):   sort_results(emails, 'date', reverse=True)[0]
-# Example (lambda):   sort_results(songs, lambda x: x.get('like_count', 0), reverse=True)[0]
-```
-
-### Pagination
-
-```python
-paginate_all(api_fn, page_size=20, **kwargs)
-# Use instead of manual page loops for any paginated API
-```
-
-### Blackboard
-
-```python
-blackboard.plan_text()   # read the full execution plan
-blackboard.mark_done(N)  # mark step N complete
-```
+`task_signal_complete` is set to `True` only when `evaluate_task()["correct"] == True`.
 
 ---
 
-## Key prompt rules
+## Major fixes in current codebase
 
-### Executor prompt (`PROMPT_TEMPLATE`)
-
-1. **ONE-STEP RULE**: Write exactly ONE small action per response. Wait for output. Never combine multiple API calls.
-2. **API DISCOVERY RULE**: Call `get_api_doc(app, api_name)` BEFORE calling any API for the first time. If unsure which API, call `list_app_apis(app)` first. If you get "No API named X": STOP, call `list_app_apis`.
-3. **FIELD NAME RULE**: AppWorld response fields are NEVER generic `id`. They use type-prefixed names: `playlist_id`, `song_id`, `album_id`, `transaction_id`, etc. Always confirm via `get_api_doc()` before accessing.
-4. **CREDENTIALS RULE**:
-   ```python
-   passwords = apis.supervisor.show_account_passwords()
-   creds = find_one(passwords, 'account_name', 'spotify')
-   result = apis.spotify.login(username="{{ supervisor.email }}", password=creds['password'])
-   access_token = result['access_token']
-   ```
-5. **MANDATORY TOOL RULES**: Use `sort_results` (not `max()`), `filter_results` (not list comprehensions), `find_one` (not `next()`), `paginate_all` (not manual loops).
-6. **Relationships** (roommates, coworkers, friends, siblings): look them up from phone app contacts, never hardcode names.
-
-### Planner prompt (`PLANNER_PROMPT_TEMPLATE`)
-
-- Output ONLY valid Python (the `blackboard.set_plan([...])` call + `print(blackboard)`)
-- Reason through 6 questions in `#` comments before writing the plan
-- Always include "Get credentials and log in" step for every app needing auth
-- Common errors section covers: wrong API name, 401 Unauthorized, NameError, missing task requirements
+| Fix | File | Description |
+|-----|------|-------------|
+| **ReAct Executor** | `executor.py` | Replaced single-shot code generation with step-by-step Thought→Action→Observation loop |
+| **Backend abstraction** | `config.py`, `executor.py` | `EXECUTOR_BACKEND="openai"` or `"ollama"` — single toggle |
+| **Phone login fix** | `executor_helpers.py` | Phone app uses `phone_number` (not `email`) as username |
+| **simple_note app name** | `prompts.py` | App directory is `simple_note` (with underscore), NOT `simplenote` |
+| **file_system create_file** | `prompts.py` | Correct API name is `create_file(file_path=..., content=...)` |
+| **like_count semantics** | `prompts.py` | `like_count` = global popularity; `show_liked_songs`/`liked=True` = user personally liked |
+| **fetch_all helper** | `executor_helpers.py` | `fetch_all(app, api, token)` — fetches all pages automatically. Fixes silent truncation where `call_api` returned only first 5 items (e.g. 5/8 playlists) |
+| **Explorer prompt reduction** | `prompts.py` | Reduced from 169 → 86 lines (49%). Preserved all load-bearing rules. Added CONTAINER vs ITEM APIs rule and two-level AGGREGATION SCOPE reasoning |
+| **Explorer tool-call cap** | `explorer.py` | Hard cap of 9 total tool calls + forced-plan reminder injected on cap/repeat. Prevents infinite loops where model calls A→B→A→B without writing a plan |
+| **KEYWORD DISCOVERY rule** | `prompts.py` | Explorer must search API names for unknown metric words instead of guessing field names from general knowledge |
+| **show_recommendations pattern** | `prompts.py` | "most/least recommended artist" = count artist appearances across all pages of show_recommendations (no score field exists) |
+| **AGGREGATION SCOPE two-level** | `prompts.py` | Explorer identifies WHAT noun the metric modifies: metric on item → iterate all containers; metric on container → filter container first, then items within |
+| **CONTAINER vs ITEM APIs** | `prompts.py` | Item-level fields (play_count, rating) live on show_song/show_product, NOT on show_album/show_playlist. Explorer must call get_api_details on the item API |
+| **BOOTSTRAP_CODE helpers** | `executor_helpers.py` | Auto-injected: `login_to_app`, `call_api`, `fetch_all`, `filter_results`, `get_field`, `sort_by`, `find_contact` |
+| `exit()` forbidden | `prompts.py` | AppWorld blocks `exit()`/`sys.exit()` — must use `failed = True` flag pattern |
+| Ollama retry | `llms.py` | 1 retry + 10s sleep on connection failure |
 
 ---
 
-## The Blackboard
+## Design principle (IMPORTANT — apply in every future fix)
 
-```python
-# Planner writes:
-blackboard.set_plan(["Step 1: ...", "Step 2: ..."], status="complete")
-print(blackboard)
+**Every prompt or code fix should solve a general problem, not just patch the specific failing task.**
 
-# Executor reads/updates:
-print(blackboard.plan_text())
-blackboard.mark_done(1)
+Before implementing a fix, ask: *"What is the general failure class this represents? Could it occur in other tasks too?"*
 
-# main.py polls:
-world.execute("print(blackboard.plan_status)")  # "complete" | ""
-world.execute("print(blackboard.plan_text())")  # numbered plan string
-world.execute("print(blackboard.completed_steps)")  # for feedback
-```
+Examples from this session:
+- Task 1 failed due to pagination → fixed with `fetch_all` helper that benefits ALL list API calls across ALL tasks
+- Task 20 failed because Explorer guessed a field → fixed with KEYWORD DISCOVERY rule that applies to ANY unknown metric word
+- Task 2 failed because Explorer looked at container API for item fields → fixed with CONTAINER vs ITEM APIs rule that applies to any nested data structure
+- Explorer looped on tool calls → fixed with a hard cap + structured reminder that prevents loops on ANY task
+
+A fix that only adds a task-specific example is a plaster. A fix that adds a general rule is a real improvement.
 
 ---
 
-## Current config values (`config.py`)
+## Dependency notes (important)
 
-```python
-MODEL_NAME           = "gpt-4.1-nano"
-LLM_MAX_TOKENS       = 2000
-MAX_PLAN_STEPS       = 7
-MAX_PLANNING_ROUNDS  = 3
-# main.py run config:
-max_interactions     = 25
-max_mission_retries  = 2
-max_consecutive_errors = 3
-experiment_name      = "lara_gpt_nano_run"
-dataset              = "train"
-task_ids[:20]        # runs first 20 tasks
-```
+These packages must stay in sync:
+
+| Package | Required version | Why |
+|---------|-----------------|-----|
+| pydantic | `<2.0.0` (1.10.x) | appworld + sqlmodel require pydantic v1 |
+| langchain | `0.1.20` | compatible with langchain-core 0.2.x |
+| langchain-core | `0.2.43` | required by langgraph 0.2.76 |
+| langgraph | `0.2.76` | 0.0.69 has `__start__` KeyError; 1.x requires langchain-core 1.x |
+| openai | latest | for GPT-4.1-nano Explorer/Executor |
+
+**Never run `pip install langgraph --upgrade`** — it pulls langchain-core 1.x which breaks everything.
 
 ---
 
-## Benchmark history
+## Benchmark results — 20-task train split
 
-| Run | Model | Tasks | Notes |
-|-----|-------|-------|-------|
-| Before session | Qwen2.5-coder (Ollama) | 5 | Old config |
-| Run 4 | GPT-4.1-nano | 20 | First GPT run — `item['id']` KeyError, wrong API names, `sort_results` lambda crash |
-| Run 5 | GPT-4.1-nano | 20 | With `list_app_apis` + `get_api_doc` + lambda fix. Deep analysis done (see below) |
+| Run | Setup | Score |
+|-----|-------|-------|
+| Run 1 | Qwen Explorer (baseline) | 2/20 (10%) |
+| Run 2 | GPT Explorer + 1 task tested | — |
+| Run 3 | GPT Explorer + updated prompt | 2/20 (10%) |
+| Run 4 | OpenAI native function calling + pre-injection (single-shot Executor) | 1/20 (5%) |
+| Run 5 | First ReAct Executor (no targeted fixes) | 3/20 (15%) |
+| Run 6 | Aggressive "ALWAYS code block" prompt | **0/20 (0%)** ← regression |
+| Run 7 | Careful prompts + phone login fix + backend abstraction | 3/20 (15%) |
+| Run 8 | Explorer prompt optimization + fetch_all + general rules (pending) | TBD |
 
----
+### Run 7 — failure classes (still open before Run 8)
+1. **Spotify rating tasks (4, 5, 6)** — wrong song_ids for review update vs add
+2. **"complete_task() never called" (7, 10, 13)** — model writes answer in prose, no code block
+3. **Phone SMS (14, 15)** — login works but `send_text_message` not invoked correctly
+4. **Venmo cross-app filter (16, 17, 18)** — "after_threshold" filter wrong
+5. **file_system content shape (11, 12)** — CSV writes succeed but song-title-to-artist mapping wrong
+6. **Task 1 scope** — fixed in this session (pagination + AGGREGATION SCOPE)
+7. **Task 20 metric** — fixed in this session (KEYWORD DISCOVERY + show_recommendations pattern)
 
-## Deep failure analysis — Run 5 (first 5 tasks, 2026-04-25)
-
-### Bug A — REPL state persists between replan cycles (CRITICAL, not yet fixed)
-
-When a replan happens, a new `ExecutorAgent` is created with empty history, but the AppWorld REPL is NOT reset. Old variables (`access_token`, `albums`, `playlists`, etc.) from the failed cycle are still in scope. The new executor:
-- Accidentally uses stale variables as if they belong to the new plan
-- Gets confused about which user is logged in (log shows 3 different emails in one task)
-- Sometimes gets `NameError` when it expects a variable that the OLD cycle defined but the new cycle didn't
-
-**Fix:** Before each new executor cycle in `main.py`, reset REPL variables:
-```python
-TOOLS_NAMES = ['blackboard','filter_results','find_one','get_by_id','sort_results',
-               'paginate_all','list_app_apis','get_api_doc','filter_apis','Blackboard']
-world.execute(f"""
-import builtins
-keep = set(dir(builtins)) | set({TOOLS_NAMES!r}) | {{'apis'}}
-for k in list(globals().keys()):
-    if k not in keep:
-        del globals()[k]
-""")
-```
-
-### Bug B — `blackboard.mark_done(N)` never called (HIGH, not yet fixed)
-
-Every replan feedback shows:
-```
-Steps completed before failure: []
-```
-The planner always gets told "nothing was completed" and writes a plan from Step 1, even when login and data-fetching succeeded. Wasted 3–5 steps per cycle.
-
-**Fix:** Add to executor prompt — call `blackboard.mark_done(N)` in the SAME code block as the step, not as a separate step:
-```python
-result = apis.spotify.login(...)
-access_token = result['access_token']
-blackboard.mark_done(1)   ← same block, not a separate step
-```
-
-### Bug C — `show_playlist` returns songs with `id` not `song_id` (HIGH, partially fixed)
-
-The FIELD NAME RULE in the prompt says "AppWorld always uses type-prefixed IDs like `song_id`". But `show_playlist` response has:
-```json
-"songs": [{"id": 1, "title": "string", "artist_ids": [...]}]
-```
-The executor calls `get_api_doc`, sees `"id": 1` in the schema, but follows the prompt rule instead → `KeyError: 'song_id'` every time.
-
-**Fix:** Remove the blanket FIELD NAME RULE. Replace with: "Response field names vary by API — ALWAYS use exactly the names shown in `get_api_doc` response_schemas. Never assume `song_id` without checking."
-
-### Bug D — Agent guesses non-existent APIs even after `inject_real_apis` (HIGH)
-
-Seen 5+ times in one task run:
-```
-Exception: No API named 'show_playlist_tracks' found in the spotify app.
-Exception: No API named 'show_user_albums' found in the spotify app.
-Exception: No API named 'get_liked_songs' found in the spotify app.
-```
-After `inject_real_apis` injects the real list, the executor reads the list but on the NEXT step guesses a different wrong name. It doesn't actually pick from the list.
-
-**Key insight:** Spotify songs within a playlist are accessed via `show_playlist(playlist_id=X)` → response field `songs`. There is NO separate `show_playlist_tracks`. This pattern must be in the prompt or plan.
-
-**Fix:** Add to the PLANNER's COMMON ERRORS section:
-> "Spotify songs within a playlist: use `show_playlist(playlist_id=X)` → `.songs` field (songs have `id`, NOT `song_id`). There is no `show_playlist_tracks`."
-
-### Bug E — Executor drifts off plan after errors (HIGH)
-
-After getting an API error and receiving the inject, the executor stops following the plan and generates code based on its own reasoning. Example: plan says "get albums", executor switches to "show_song_library" after an API error. The plan becomes irrelevant by step 5–6.
-
-**Root cause:** The prompt shows the plan once at the start, but after 5+ error/recovery messages, the plan text is far up in the conversation history and the model forgets it.
-
-**Fix options:**
-1. Re-inject `blackboard.plan_text()` as a user message every time an error occurs
-2. Add to prompt: "After ANY error — re-read the plan with `print(blackboard.plan_text())` before writing the next step"
-
-### Bug F — create vs update review — logic gap (MEDIUM)
-
-Task 692c77d: "Give 5-star rating to liked songs. If already rated lower, increase to 5."
-
-The executor only called `update_song_review`, missing songs that had NO review yet (needed `create_review`). Failed:
-```
-assert song_ids of the ADDED song reviews match private_data.to_add_review_song_ids
-```
-
-**Fix:** Add to COMMON ERRORS in planner prompt:
-> "When setting/updating a rating: first check if a review exists. If not, CREATE it. If it exists and the rating is lower, UPDATE it. Two different APIs."
-
----
-
-## Known AppWorld API quirks (discovered empirically)
-
-| App | API | Quirk |
-|-----|-----|-------|
-| spotify | `show_playlist(playlist_id)` | Returns `songs[].id` (NOT `song_id`) |
-| spotify | Playlist tracks | No `show_playlist_tracks` — use `show_playlist()['songs']` |
-| spotify | Liked songs | `show_liked_songs` (not `get_liked_songs`) |
-| spotify | Song reviews | May need `create_review` OR `update_review` depending on existence |
+### Changes made in this session (post Run 7, pre Run 8)
+- Explorer prompt: 169 → 86 lines, all critical logic preserved
+- Added `fetch_all()` helper to BOOTSTRAP_CODE (fixes all pagination-related failures)
+- Added KEYWORD DISCOVERY rule (fixes unknown metric words across all tasks)
+- Added `show_recommendations` pattern (fixes task 20 and similar)
+- Added CONTAINER vs ITEM APIs rule (fixes field lookup on wrong API level)
+- Added two-level AGGREGATION SCOPE reasoning (fixes metric-on-container vs metric-on-item ambiguity)
+- Explorer tool-call hard cap (9) + forced-plan reminder (fixes infinite tool-call loops)
+- Validated tasks 1, 2, 3, 19, 20 all correct after fixes
 
 ---
 
 ## How to run
 
 ```bash
-cd /home/omer2/LARA_project
-source .venv/bin/activate
+cd /home/omer2/LARA_project/LARA-MAS/LARA
+source ../../.venv/bin/activate
+
+# Single task (debugging):
 python main.py
 
-# Watch live:
+# Full benchmark (20 tasks):
+python benchmark.py
+
+# Subset — e.g. only tasks 19-20:
+python benchmark.py 2 18
+
+# Single task by index (0-based):
+python benchmark.py 1 0   # task 1
+python benchmark.py 1 19  # task 20
+
+# Switch executor model:
+# edit config.py:  EXECUTOR_BACKEND = "openai"  ↔  "ollama"
+
+# View live log (Windows):
 explorer.exe run_log.html
 
-# Official score after run:
-appworld evaluate lara_gpt_nano_run train
+# Official AppWorld evaluation (after benchmark):
+appworld evaluate lara_langchain_agent train
 ```
 
 ---
 
-## History of major changes (this project)
+## Documentation
 
-1. Planner + Executor split (replaced single ReAct agent with two-phase pipeline)
-2. Blackboard shared memory (structured communication between planner/executor/main.py)
-3. Planner reasoning process (6-step comment reasoning before set_plan)
-4. Auto-inject real API list on "No API named X" errors (`inject_real_apis` in main.py)
-5. Smarter planner feedback on API errors (names the wrong API, instructs lookup)
-6. Mandatory tool usage rules in executor prompt
-7. **Switched LLM from Qwen/Ollama → GPT-4.1-nano/OpenAI** (`llm_client.py` rewritten)
-8. **Added `list_app_apis` + `get_api_doc` tools** (force real API discovery before every call)
-9. **Fixed `sort_results` to accept callable (lambda) key**
-10. **Added FIELD NAME RULE to executor prompt** (AppWorld uses type-prefixed IDs)
-11. **Added roommates → phone contacts rule to executor prompt**
-
----
-
-## Pending fixes (priority order)
-
-1. **[CRITICAL] Reset REPL between replan cycles** — `main.py` Bug A above
-2. **[HIGH] Re-inject plan after each error** — executor loses plan context after 5+ messages
-3. **[HIGH] Fix FIELD NAME RULE** — remove blanket rule, trust `get_api_doc` schema only
-4. **[HIGH] Add `blackboard.mark_done(N)` in same code block** — prompt change
-5. **[MEDIUM] Add Spotify API quirks to planner COMMON ERRORS** — `show_playlist` → songs.id, no `show_playlist_tracks`, create vs update review
+`/home/omer2/LARA_project/LARA - Documentation.docx` — full per-run experiment log with per-task tables and root-cause analysis. Updated after every run.

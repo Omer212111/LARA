@@ -1,4 +1,5 @@
 appworld
+langgraph
 requests
 urllib3
 jinja2
