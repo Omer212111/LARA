@@ -1,252 +1,281 @@
-def filter_results(data: list, key: str, value) -> list:
+"""
+LARA Tools v2 - Expanded toolkit for AppWorld
+==============================================
+Key additions vs. v1:
+  * execute_python_code  -> main workhorse, lets the agent write real code
+  * get_api_details      -> fetch parameter schema for a specific API
+  * mark_task_complete   -> properly closes the task in AppWorld
+  * Internal _execute_code_raw helper so we don't duplicate env.execute calls
+"""
+
+import json
+from typing import Optional
+from langchain.tools import tool
+from appworld import AppWorld
+
+
+# ---------------------------------------------------------------------------
+# Global environment handle (set from main.py / benchmark.py)
+# ---------------------------------------------------------------------------
+
+env: Optional[AppWorld] = None
+
+
+def set_appworld_env(new_env: AppWorld):
+    global env
+    env = new_env
+    print(f"\n[SYSTEM] Tools re-wired to new task ID: {env.task.id}")
+
+
+def get_current_task_instruction() -> str:
+    if not env:
+        return "Error: AppWorld environment is offline."
+    return env.task.instruction
+
+
+def evaluate_task() -> dict:
     """
-    Filters a list of dicts. Returns items where key contains value (case-insensitive).
-    Example: filter_results(all_emails, 'subject', 'meeting')
+    Returns the real AppWorld evaluation result.
+    Mirrors what `appworld evaluate` does internally.
+    Returns a dict: {completed, correct, pass_count, total_count, pass_percentage, failures}
     """
-    if not isinstance(data, list):
-        raise TypeError(f"filter_results expects a list, got {type(data).__name__}")
-    value_lower = str(value).lower()
-    return [item for item in data if value_lower in str(item.get(key, "")).lower()]
+    if not env:
+        return {"completed": False, "correct": False, "pass_count": 0, "total_count": 0,
+                "pass_percentage": 0.0, "failures": []}
+    completed = env.task_completed()
+    if not completed:
+        return {"completed": False, "correct": False, "pass_count": 0, "total_count": 0,
+                "pass_percentage": 0.0, "failures": []}
+    result = env.evaluate()
+    return {
+        "completed": True,
+        "correct": result.success,
+        "pass_count": result.pass_count,
+        "total_count": result.total_count,
+        "pass_percentage": result.pass_percentage,
+        "failures": [f['requirement'] for f in result.failures[:5]],
+    }
 
 
-def find_one(data: list, key: str, value) -> dict | None:
-    """
-    Returns the first item where key contains value (case-insensitive), or None.
-    Example: email = find_one(all_emails, 'subject', 'invoice')
-    """
-    results = filter_results(data, key, value)
-    return results[0] if results else None
+# ---------------------------------------------------------------------------
+# Internal helper: raw code execution (not a @tool, used by other tools)
+# ---------------------------------------------------------------------------
 
-
-def get_by_id(data: list, id_key: str, id_value) -> dict | None:
-    """
-    Returns the first item where data[id_key] == id_value (exact match), or None.
-    Example: contact = get_by_id(contacts, 'id', 42)
-    """
-    if not isinstance(data, list):
-        raise TypeError(f"get_by_id expects a list, got {type(data).__name__}")
-    for item in data:
-        if item.get(id_key) == id_value:
-            return item
-    return None
-
-
-def sort_results(data: list, key, reverse: bool = False) -> list:
-    """
-    Sorts a list of dicts by key. Returns a new sorted list.
-    key can be a string field name OR a callable (lambda).
-    Example (string):   sort_results(emails, 'date', reverse=True)
-    Example (callable): sort_results(songs, lambda x: x.get('like_count', 0), reverse=True)
-    """
-    if not isinstance(data, list):
-        raise TypeError(f"sort_results expects a list, got {type(data).__name__}")
-    if callable(key):
-        return sorted(data, key=key, reverse=reverse)
-    return sorted(data, key=lambda x: x.get(key) or "", reverse=reverse)
-
-
-def list_app_apis(app_name: str) -> list:
-    """
-    Returns all available API names and short descriptions for an app.
-
-    Use this when:
-      - You don't know which API to call for a given action.
-      - You got 'No API named X found' — call this to see the real names.
-
-    Example: list_app_apis('spotify')
-    → [{"name": "show_playlist_library", "description": "..."}, ...]
-    """
-    return apis.api_docs.show_api_descriptions(app_name=app_name)
-
-
-def get_api_doc(app_name: str, api_name: str) -> dict:
-    """
-    Returns the FULL specification for a specific API:
-    exact parameter names, types, required/optional, and response field names.
-
-    Use this BEFORE calling any API you haven't verified yet — it tells you:
-      - Which parameter names to pass (e.g. 'playlist_id', not 'id')
-      - What fields the response contains (e.g. 'song_id', not 'id')
-
-    If the api_name doesn't exist, automatically falls back to list_app_apis()
-    so you can pick the correct name.
-
-    Example: get_api_doc('spotify', 'show_playlist_library')
-    """
+def _execute_code_raw(code: str) -> str:
+    """Run code inside AppWorld. Returns stringified output or error."""
+    if not env:
+        return "Error: AppWorld offline."
     try:
-        return apis.api_docs.show_api_doc(app_name=app_name, api_name=api_name)
+        result = env.execute(code)
+        return str(result) if result is not None else "[Code executed with no printed output]"
     except Exception as e:
-        # API name is wrong — return the real list so the caller can pick correctly
-        try:
-            available = list_app_apis(app_name)
-            return {
-                "error": f"No API named '{api_name}' in '{app_name}'.",
-                "hint": "Choose the correct name from 'available_apis' below.",
-                "available_apis": available,
-            }
-        except Exception:
-            return {"error": str(e)}
+        return f"Execution Failed: {e}"
 
 
-class Blackboard:
-    """
-    Shared communication channel between PlannerAgent and ExecutorAgent.
-
-    Planner writes to it during discovery and planning:
-        blackboard.add_apis('spotify', filtered_apis)
-        blackboard.set_plan(["Step 1: ...", "Step 2: ..."], status="complete")
-        print(blackboard)   # always print so the output is visible
-
-    Executor reads the plan and marks progress:
-        print(blackboard.plan_text())   # read the full plan at any time
-        blackboard.mark_done(1)         # mark step 1 complete after finishing it
-    """
-
-    def __init__(self):
-        self.discovered_apps = []    # list of relevant app names
-        self.discovered_apis = {}    # {app_name: [api_name, ...]}
-        self.plan_steps      = []    # ordered list of step strings
-        self.plan_status     = ""    # "complete" | "incomplete"
-        self.completed_steps = []    # step numbers finished by executor
-        self.notes           = ""    # free-form notes from either agent
-
-    def add_apis(self, app_name: str, apis_list: list) -> None:
-        """Store filtered API names for an app after discovery."""
-        self.discovered_apis[app_name] = [
-            a["name"] if isinstance(a, dict) else str(a) for a in apis_list
-        ]
-
-    def set_plan(self, steps: list, status: str = "complete") -> None:
-        """Planner calls this as its FINAL step to submit the execution plan."""
-        self.plan_steps  = [str(s) for s in steps]
-        self.plan_status = status
-
-    def mark_done(self, step_num: int) -> None:
-        """Executor calls this after completing each step."""
-        if step_num not in self.completed_steps:
-            self.completed_steps.append(step_num)
-
-    def plan_text(self) -> str:
-        """Returns the plan as a numbered string."""
-        if not self.plan_steps:
-            return "(no plan)"
-        return "\n".join(f"# Step {i+1}: {s}" for i, s in enumerate(self.plan_steps))
-
-    def __repr__(self) -> str:
-        steps_str = "\n".join(f"    {i+1}. {s}" for i, s in enumerate(self.plan_steps)) or "    (none)"
-        return (
-            f"Blackboard(\n"
-            f"  status   = {self.plan_status!r}\n"
-            f"  apps     = {self.discovered_apps}\n"
-            f"  plan     =\n{steps_str}\n"
-            f"  done     = {self.completed_steps}\n"
-            f")"
-        )
+def _strip_code_fences(code: str) -> str:
+    """Remove ```python ... ``` fences if the LLM wrapped its code."""
+    code = code.strip()
+    if code.startswith("```python"):
+        code = code[len("```python"):].strip()
+    elif code.startswith("```"):
+        code = code[3:].strip()
+    if code.endswith("```"):
+        code = code[:-3].strip()
+    return code
 
 
-blackboard = Blackboard()
+# ---------------------------------------------------------------------------
+# TOOL 1: Ping
+# ---------------------------------------------------------------------------
+
+@tool
+def system_ping(dummy_input: str = "") -> str:
+    """Pings the AppWorld engine to verify it is online. Input can be anything or empty."""
+    print("\n[ACTION] Pinging AppWorld Environment...")
+    return _execute_code_raw(
+        "import datetime\nprint(f'System Online. Virtual Time: {datetime.datetime.now()}')"
+    )
 
 
-def filter_apis(apis_list: list, keywords: list) -> list:
-    """
-    Filters an API description list to only entries whose name or description
-    contains at least one of the given keywords (case-insensitive).
-    Use this right after show_api_descriptions to cut a large API list down to
-    only the APIs relevant to your task before printing or planning.
-    Example: relevant = filter_apis(all_apis, ['playlist', 'create', 'song'])
-             print(relevant)
-    """
-    if not isinstance(apis_list, list):
-        raise TypeError(f"filter_apis expects a list, got {type(apis_list).__name__}")
-    keywords_lower = [str(k).lower() for k in keywords]
-    return [
-        api for api in apis_list
-        if any(
-            kw in api.get("name", "").lower() or kw in api.get("description", "").lower()
-            for kw in keywords_lower
-        )
-    ]
+# ---------------------------------------------------------------------------
+# TOOL 2: List apps
+# ---------------------------------------------------------------------------
+
+@tool
+def list_available_apps(dummy_input: str = "") -> str:
+    """Returns a list of all available applications installed in AppWorld.
+    Input can be anything or empty."""
+    print("\n[ACTION] Fetching list of available apps...")
+    return _execute_code_raw("print(apis.api_docs.show_app_descriptions())")
 
 
-def paginate_all(api_fn, page_size: int = 20,
-                 page_key: str = "page_index", size_key: str = "page_limit",
-                 **kwargs) -> list:
-    """
-    Collects all pages from a paginated API. Stops when an empty page is returned.
-    Defaults match AppWorld convention: page_index (0-based) + page_limit.
-    Example: all_playlists = paginate_all(apis.spotify.show_playlist_library, access_token=token)
-    For APIs with different param names: paginate_all(fn, page_key="page", size_key="limit", ...)
-    """
-    results = []
-    page = 0  # AppWorld uses 0-based page indexing
-    while True:
-        data = api_fn(**{page_key: page, size_key: page_size, **kwargs})
-        if not data:
-            break
-        results.extend(data)
-        if len(data) < page_size:
-            break
-        page += 1
-    return results
+# ---------------------------------------------------------------------------
+# TOOL 3: Explore app APIs (high level list)
+# ---------------------------------------------------------------------------
+
+@tool
+def explore_app_apis(app_name: str) -> str:
+    """Returns the list of API methods and short descriptions for a specific application.
+    Pass the app name as a simple lowercase string like 'spotify' or 'gmail'."""
+    app_name = app_name.replace('"', '').replace("'", "").strip()
+    print(f"\n[ACTION] Fetching API docs for '{app_name}'...")
+    code = f"print(apis.api_docs.show_api_descriptions(app_name='{app_name}'))"
+    return _execute_code_raw(code)
 
 
-# ── High-level helpers (reduce boilerplate in executor code) ──────────────────
+# ---------------------------------------------------------------------------
+# TOOL 4: Get detailed docs for a specific API (parameters + response schema)
+# ---------------------------------------------------------------------------
 
-def login_to_app(app_name: str) -> str:
-    """
-    Login to any AppWorld app in one call. Returns access_token.
-    Handles supervisor email lookup + credential lookup + login automatically.
-    Example: token = login_to_app('spotify')
-    """
-    email = apis.supervisor.show_profile()['email']
-    accounts = apis.supervisor.show_account_passwords()
-    cred = find_one(accounts, 'account_name', app_name)
-    if not cred:
-        raise ValueError(f"No credentials found for app '{app_name}'")
-    result = getattr(apis, app_name).login(username=email, password=cred['password'])
-    return result['access_token']
+@tool
+def get_api_details(json_input: str) -> str:
+    """Get detailed documentation for a SPECIFIC API method (parameters + response schema).
+    Action Input MUST be a valid JSON string with 'app_name' and 'api_name' keys.
+    Example Action Input: {"app_name": "spotify", "api_name": "show_liked_songs"}
 
-
-def call_api(app_name: str, api_name: str, token: str, **kwargs):
-    """
-    Call any AppWorld API with access_token injected automatically.
-    Works for both read and write/update operations.
-    Example: songs  = call_api('spotify', 'show_liked_songs', token)
-    Example: call_api('spotify', 'rate_song', token, song_id=123, rating=5)
-    """
-    func = getattr(getattr(apis, app_name), api_name)
-    return func(access_token=token, **kwargs)
-
-
-def get_field(data: list, match_key: str, match_value, return_key: str, default=None):
-    """
-    From a list of dicts, return return_key of the first item where item[match_key] == match_value.
-    Returns default if not found.
-    Example: song_id = get_field(songs, 'title', 'Silver Lining', 'song_id')
-    """
-    for item in data:
-        if item.get(match_key) == match_value:
-            return item.get(return_key, default)
-    return default
-
-
-def find_contact(name: str) -> dict | None:
-    """
-    Look up a person by name in the phone app contacts.
-    Use for roommates, coworkers, friends, siblings — any relationship-based lookup.
-    Returns the full contact dict (has 'email', 'phone_number', etc.) or None.
-    Example: contact = find_contact('Alice')
-             email   = contact['email']
-    """
-    token = login_to_app('phone')
+    Call this BEFORE executing an API you haven't used — it tells you what parameters it needs
+    (e.g., access_token, pagination) and what the response looks like."""
     try:
-        results = apis.phone.search_contacts(access_token=token, query=name)
-        if results:
-            return results[0]
-    except Exception:
-        pass
-    all_contacts = apis.phone.show_contacts(access_token=token)
-    name_lower = name.lower()
-    matches = [c for c in all_contacts
-               if name_lower in str(c.get('name') or c.get('full_name') or '').lower()]
-    return matches[0] if matches else None
+        data = json.loads(json_input)
+        app_name = data.get("app_name")
+        api_name = data.get("api_name")
+        if not app_name or not api_name:
+            return "Error: JSON must contain both 'app_name' and 'api_name'."
+    except Exception as e:
+        return f"Error: Action Input must be valid JSON. Details: {e}"
+
+    print(f"\n[ACTION] Getting detailed docs for {app_name}.{api_name}...")
+    code = f"print(apis.api_docs.show_api_doc(app_name='{app_name}', api_name='{api_name}'))"
+    return _execute_code_raw(code)
+
+
+# ---------------------------------------------------------------------------
+# TOOL 5: execute_python_code — THE MAIN WORKHORSE
+# ---------------------------------------------------------------------------
+
+@tool
+def execute_python_code(code: str) -> str:
+    """Execute arbitrary Python code inside AppWorld. This is your MAIN tool.
+    You have access to the `apis` object which exposes all apps
+    (e.g. apis.spotify, apis.gmail, apis.supervisor).
+    Use print() to see results. You can chain multiple API calls and process data in ONE call.
+
+    AUTHENTICATION PATTERN (most apps require login first):
+        accounts = apis.supervisor.show_account_passwords()
+        # accounts is a list of dicts: [{"account_name": "spotify", "username": ..., "password": ...}, ...]
+        cred = next(a for a in accounts if a['account_name'] == 'spotify')
+        login = apis.spotify.login(username=cred['username'], password=cred['password'])
+        token = login['access_token']
+        # Pass token to subsequent calls: apis.spotify.show_liked_songs(access_token=token)
+
+    The code can be multi-line and use loops, comprehensions, try/except, etc.
+    """
+    if not env:
+        return "Error: AppWorld offline."
+
+    code = _strip_code_fences(code)
+
+    print(f"\n[ACTION] Executing Python code ({len(code)} chars)...")
+    print("----- CODE -----")
+    print(code[:800] + ("..." if len(code) > 800 else ""))
+    print("----------------")
+
+    try:
+        result = env.execute(code)
+        output = str(result) if result is not None else "[No printed output]"
+        print(f"----- RESULT -----\n{output[:800]}\n------------------")
+        return output
+    except Exception as e:
+        err = f"Execution Failed: {e}"
+        print(f"----- ERROR -----\n{err}\n-----------------")
+        return err
+
+
+# ---------------------------------------------------------------------------
+# TOOL 6: Mark task complete — closes the task in AppWorld
+# ---------------------------------------------------------------------------
+
+@tool
+def mark_task_complete(answer: str = "") -> str:
+    """Call this ONLY when you have definitively found the answer to the task.
+    This notifies AppWorld that the task is finished. Pass the final answer as a string.
+
+    For answer-tasks: mark_task_complete(answer='The Song Title Here')
+    For action-tasks (send email etc.): mark_task_complete(answer='done')
+    For list answers: mark_task_complete(answer='["item1", "item2"]')
+    """
+    if not env:
+        return "Error: AppWorld offline."
+
+    print(f"\n[ACTION] Marking task complete with answer: {answer[:200]}")
+    # Use repr() to safely escape any quotes/newlines in the answer
+    code = f"apis.supervisor.complete_task(answer={repr(answer)})\nprint('TASK_MARKED_COMPLETE')"
+    try:
+        result = env.execute(code)
+        return f"Task marked complete. Output: {result}"
+    except Exception as e:
+        # Fallback: some task types don't accept an answer parameter
+        try:
+            code2 = "apis.supervisor.complete_task()\nprint('TASK_MARKED_COMPLETE_NO_ANSWER')"
+            result = env.execute(code2)
+            return f"Task marked complete (no-answer variant). Output: {result}"
+        except Exception as e2:
+            return f"complete_task failed: {e}. Fallback also failed: {e2}"
+
+
+# ---------------------------------------------------------------------------
+# TOOL 7 (legacy): execute_app_api — kept for backward compatibility
+# ---------------------------------------------------------------------------
+
+@tool
+def execute_app_api(json_input: str) -> str:
+    """Execute ONE specific API method. For anything more complex, use execute_python_code instead.
+    Action Input MUST be valid JSON with 'app_name', 'api_method', and optionally 'parameters'.
+    Example: {"app_name": "spotify", "api_method": "show_liked_songs",
+              "parameters": {"access_token": "xyz"}}
+    """
+    try:
+        data = json.loads(json_input)
+        app_name = data.get("app_name")
+        api_method = data.get("api_method")
+        parameters = data.get("parameters", {})
+        if not app_name or not api_method:
+            return "Error: JSON must contain both 'app_name' and 'api_method'."
+    except Exception as e:
+        return f"Error: Action Input must be valid JSON. Details: {e}"
+
+    print(f"\n[ACTION] Executing {app_name}.{api_method} with args: {parameters}")
+    kwargs = ", ".join([f"{k}={repr(v)}" for k, v in parameters.items()])
+    code = f"res = apis.{app_name}.{api_method}({kwargs})\nprint(res)"
+    return _execute_code_raw(code)
+
+
+# ---------------------------------------------------------------------------
+# Export lists
+# ---------------------------------------------------------------------------
+
+# Tools for the Explorer agent (discovery only)
+explorer_tools = [
+    list_available_apps,
+    explore_app_apis,
+    get_api_details,
+]
+
+# Tools for the Executor agent (action)
+executor_tools = [
+    execute_python_code,
+    mark_task_complete,
+    execute_app_api,
+    system_ping,
+]
+
+# Full set
+appworld_tools = [
+    system_ping,
+    list_available_apps,
+    explore_app_apis,
+    get_api_details,
+    execute_python_code,
+    mark_task_complete,
+    execute_app_api,
+]

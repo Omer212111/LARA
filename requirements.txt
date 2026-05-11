@@ -1,6 +1,13 @@
 appworld
+langgraph==0.0.52
+langchain==0.2.5
+langchain-core==0.2.43
+langchain-openai==0.1.9
+openai>=1.14.0
 requests
 urllib3
 jinja2
-langchain
-langchain-core
+pydantic==1.10.26
+sqlmodel==0.0.10
+ormsgpack
+freezegun

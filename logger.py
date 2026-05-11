@@ -1,8 +1,11 @@
 """
 logger.py — writes agent run output to run_log.html (auto-refreshes every 2s).
 Open run_log.html in a browser while running main.py to watch in real time.
+Console output is flushed immediately so Windows buffers don't swallow it when
+the HTML file is blocked by the AppWorld sandbox.
 """
 import html as _html
+import sys
 from datetime import datetime
 
 _LOG_FILE = "run_log.html"
@@ -12,7 +15,7 @@ _HTML_HEADER = """\
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta http-equiv="refresh" content="2">
+<meta http-equiv="refresh" content="5">
 <title>LARA Agent Log</title>
 <style>
   * { box-sizing: border-box; }
@@ -103,12 +106,24 @@ def _esc(text: str) -> str:
 
 def _append(snippet: str) -> None:
     global _initialized
-    if not _initialized:
-        with open(_LOG_FILE, "w", encoding="utf-8") as f:
-            f.write(_HTML_HEADER)
-        _initialized = True
-    with open(_LOG_FILE, "a", encoding="utf-8") as f:
-        f.write(snippet + "\n")
+    try:
+        if not _initialized:
+            # ניסיון יצירת הקובץ עם הכותרת
+            with open(_LOG_FILE, "w", encoding="utf-8") as f:
+                f.write(_HTML_HEADER)
+            _initialized = True
+        
+        # ניסיון הוספת הלוג החדש
+        with open(_LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(snippet + "\n")
+            
+    except PermissionError:
+        # אם AppWorld חוסם כתיבה, אנחנו מדפיסים למסך כדי שלא נאבד מידע
+        # אבל לא נותנים לשגיאה להקריס את ה-Benchmark
+        print(f"\n[AppWorld Safety Block] Logger couldn't write to file. Output: {snippet[:100]}...", flush=True)
+    except Exception as e:
+        print(f"\n[Logger Error] {e}", flush=True)
+    sys.stdout.flush()
 
 
 # ─────────────────────────────────────────────
