@@ -8,6 +8,13 @@ import html as _html
 import sys
 from datetime import datetime
 
+# Windows consoles default to cp1252 which can't encode emojis.
+# Reconfigure to UTF-8 once at import time so all print() calls work.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 _LOG_FILE = "run_log.html"
 
 _HTML_HEADER = """\

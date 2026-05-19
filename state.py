@@ -26,3 +26,5 @@ class AgentState(TypedDict, total=False):
     last_eval_failure:    str    # failed test requirements from evaluate_task()
     reviewer_ran:         bool   # True after Reviewer has processed this wrong attempt
     reviewer_diagnosis:   str    # structured diagnosis from Reviewer (separate from last_error)
+    # Sub-agent tracking
+    active_app:           str    # last app specialist used ("spotify", "gmail", etc., or "")

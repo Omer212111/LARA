@@ -5,6 +5,10 @@ For benchmarks, use benchmark.py.
 """
 
 import sys
+
+from dotenv import load_dotenv
+load_dotenv()
+
 from appworld import AppWorld, load_task_ids
 
 from planning_loop import process_goal
