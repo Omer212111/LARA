@@ -93,6 +93,7 @@ def process_goal(goal: str, task_id: str = "") -> bool:
         "last_code":            "",
         "last_eval_failure":    "",
         "reviewer_ran":         False,
+        "active_app":           "",
     }
 
     try:

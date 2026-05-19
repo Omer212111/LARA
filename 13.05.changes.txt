@@ -1,0 +1,133 @@
+LARA MAS — Agent Flow
+=====================
+
+  task_id
+     │
+     ▼
+┌─────────────┐
+│  main.py /  │  Loads task, enriches with user profile
+│benchmark.py │  (name, email, phone), calls process_goal()
+└──────┬──────┘
+       │
+       ▼
+┌──────────────────────────────────────────────────────────────┐
+│              LangGraph StateGraph (planning_loop.py)         │
+│                                                              │
+│  Entry ──► SUPERVISOR ◄──────────────────────────┐          │
+│                │                                  │          │
+│          (routing rules)                          │          │
+│           ┌───┴────┐                              │          │
+│           ▼        ▼                              │          │
+│       EXPLORER   EXECUTOR ──► wrong answer? ──► REVIEWER    │
+│       (no plan)  (has plan)        │               │         │
+│           │                        │   diagnosis   │         │
+│           │                        └───────────────┘         │
+│           └──────────► SUPERVISOR                            │
+│                            │                                 │
+│                         FINISH ──► END                       │
+└──────────────────────────────────────────────────────────────┘
+
+
+SUPERVISOR (supervisor.py)
+--------------------------
+Deterministic rules first, LLM only for ambiguous states:
+  no plan              → Explorer
+  has plan, 0 runs     → Executor
+  3 exec failures      → Explorer (re-plan)
+  MAX_ITERATIONS hit   → FINISH
+  task_done=True       → FINISH
+  else                 → LLM decides (Explorer / Executor / FINISH)
+
+
+EXPLORER (explorer.py — GPT-4.1-nano)
+--------------------------------------
+1. Detect relevant apps by keyword from task text
+2. Pre-inject API docs for detected apps into system prompt
+3. OpenAI function-calling loop (up to 10 rounds):
+     Round 0: tool_choice="required"  → must call explore_app_apis or get_api_details
+     Round 1+: tool_choice="auto"     → continues until no tool calls
+4. Output: structured plan with step-by-step pseudocode
+
+
+EXECUTOR (executor.py + app_agents/)
+-------------------------------------
+AppOrchestrator  (app_agents/base.py)
+     │
+     ├── detects active app from plan step
+     ├── selects matching Specialist prompt
+     │
+     ├── SpotifyExecutor   ← code templates for rating/finding songs
+     ├── GmailExecutor
+     ├── AmazonExecutor
+     ├── FileSystemExecutor
+     └── fallback: generic REACT_EXECUTOR_SYSTEM
+
+  ReAct loop (up to 5 steps per run):
+     Think → Write code → Execute in AppWorld sandbox → Observe output → Repeat
+
+  On complete_task(): sets task_signal_complete, extracts final_answer
+
+
+REVIEWER (reviewer.py — GPT-4.1-nano)
+---------------------------------------
+Only fires when: complete_task() called BUT answer was WRONG
+  Receives: task, plan, last code, all execution outputs, failed test requirements
+  Diagnoses: ENVIRONMENT_ERROR | WRONG SCOPE | WRONG METRIC | WRONG FIELD | ...
+  Output: structured FIX_INSTRUCTION appended to state for next Executor run
+
+
+================================================================================
+Changes Made Today (2026-05-13)
+================================================================================
+
+1. app_agents/spotify.py — Complete rewrite
+-------------------------------------------
+- Placed ready-to-use code templates at the TOP of the specialist prompt
+- Template for "rate liked songs in playlists" uses the INTERSECTION pattern:
+    target_ids = liked_ids & all_pl_ids
+  and loops over target_ids (not liked_ids)
+- Template calls apis.supervisor.complete_task(answer=None) (not answer='done')
+- Added explicit review upsert logic: checks for existing review by user_email,
+  uses song_review_id (not id or review_id)
+- Added template for "most-liked/most-played song" with correct field like_count
+
+
+2. app_agents/base.py — Fix final_answer extraction
+----------------------------------------------------
+- Old code searched for "FINAL_ANSWER:" in execution output — agent never printed this
+- Fixed to search for complete_task(answer='...') in all code steps written by the LLM
+
+
+3. prompts.py — Multiple fixes (6 locations)
+---------------------------------------------
+
+  Location                    | Old                                | Fixed
+  ----------------------------|------------------------------------|----------------------------------
+  Explorer SEMANTIC SELECTION | "liked songs" → show_liked_songs   | "liked songs in playlists" =
+                              | only                               | INTERSECTION of liked_ids AND
+                              |                                    | playlist song_ids
+  ----------------------------|------------------------------------|----------------------------------
+  Explorer RATE/REVIEW section| Python f-string code with {}       | Replaced with pseudocode (no {})
+                              | → CRASHED build_explorer_system()  | — readable instructions, not
+                              | with NameError at runtime          | executable Python
+  ----------------------------|------------------------------------|----------------------------------
+  Explorer OUTPUT FORMAT      | complete_task(answer='done')       | complete_task(answer=None)
+                              | for action tasks                   | action tasks always use None
+  ----------------------------|------------------------------------|----------------------------------
+  REACT_EXECUTOR_SYSTEM       | Same answer='done' mistake in      | answer=None with explicit warning
+  rules 6 & 7                 | rules 6 & 7                        |
+  ----------------------------|------------------------------------|----------------------------------
+  EXECUTOR_SYSTEM_TEMPLATE    | answer='done' in code examples     | answer=None
+  examples                    |                                    |
+  ----------------------------|------------------------------------|----------------------------------
+  IMPORTANT FACTS +           | Referenced non-existent 'liked'    | Removed; clarified that only
+  filter_results example      | field on show_song /               | show_liked_songs reveals
+                              | show_song_library                  | liked status
+
+Root cause of task 4 failures was 4 compounding bugs:
+  1. Wrong intersection logic (rating ALL liked songs, not just those also in playlists)
+  2. f-string crash in Explorer (Python code inside build_explorer_system() f-string)
+  3. Wrong review ID field (used 'id' instead of 'song_review_id')
+  4. Wrong action answer ('done' instead of Python None)
+
+Final result after all fixes: task 692c77d_1 → 7/7 tests passed (100%) CORRECT

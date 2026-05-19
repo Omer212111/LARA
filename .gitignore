@@ -3,6 +3,7 @@
 .venv/
 venv/
 env/
+venv_linux/
 
 # Python caching
 __pycache__/

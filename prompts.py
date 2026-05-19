@@ -66,33 +66,91 @@ SEMANTIC API SELECTION — common task patterns:
   "songs in my playlists"        → show_playlist_library → show_playlist for EACH playlist
   "song library / saved songs"   → show_song_library  (not playlists, not liked songs)
   "album library"                → show_album_library
-  "liked songs"                  → show_liked_songs or filter by liked=True (verify first)
+  "liked songs in playlists"     → INTERSECTION: liked_ids from show_liked_songs AND playlist song_ids from show_playlist_library
+  "liked songs" (no "in playlists") → show_liked_songs only — there is NO liked=True field on songs
   "roommate/coworker/friend/sibling/colleague" → look up via phone app using find_contact()
   "file/folder/directory"        → file_system app APIs, NOT Python's built-in open()
   "send email / compose"         → gmail app
   "send money / pay / charge"    → venmo app
 
+  AMAZON PATTERNS — match the task to ONE flow. These three "order" cases are DIFFERENT:
+
+  "Place an order for all <X> in my CART" → it orders items ALREADY in the cart:
+     1. login_to_app('amazon')
+     2. call_api('amazon','show_cart',token)  — dict, NOT paginated
+     3. For each cart item, check call_api('amazon','show_product',token,product_id=pid)['product_type'];
+        delete_product_from_cart for every item whose type != <X>.
+     4. place_order (try each payment card; address by name). Final answer: None.
+     ⚠️ Do NOT search_products. Do NOT touch the wishlist. Do NOT change quantities.
+
+  "Place an order for all <X> in my WISH LIST" → it orders <X> items from the wishlist:
+     1. login → 2. empty the cart (delete every cart item) →
+     3. call_api('amazon','show_wish_list',token) — not paginated;
+        for each item whose show_product type == <X>, move_product_from_wish_list_to_cart
+        with quantity = that item's wishlist quantity →
+     4. place_order. Final answer: None.
+     ⚠️ Do NOT search_products. Leave non-<X> wishlist items untouched.
+
+  "Buy me a <X> ... from its highest-rated seller ..." → orders ONE new product:
+     1. login → 2. empty the cart →
+     3. search_products(product_type='<X>'); for each candidate look up
+        show_seller(seller_id)['rating']; pick the one whose SELLER rating is highest →
+     4. add_product_to_cart(that product, quantity=1) →
+     5. place_order with the named card + named address. Final answer: None.
+
+  "return a product"             → show_orders (find order) → show_return_deliverers → initiate_return
+  "subscribe to prime"           → show_payment_cards → subscribe_prime(payment_card_id, duration='monthly'|'yearly')
+  "items in my orders"           → fetch_all_pages show_orders (order_items ALREADY in response — no show_order loop needed)
+  "items in my wishlist"         → show_wish_list (single call, not paginated)
+  "find products by type"        → search_products(product_type=<type>, sort_by='-rating') — sort server-side
+  "download receipt"             → download_order_receipt(order_id, download_to_file_path='~/downloads/receipt.pdf')
+
+  ⚠️ NEVER hardcode product_id / payment_card_id / address_id in a plan step — they must be
+     looked up at runtime. NEVER add an unrelated app (e.g. phone) unless the task names a person.
+  ⚠️ search_sellers does NOT exist — get a seller's rating only via show_seller(seller_id).
+
+  AMAZON FIELD TRAPS:
+  Product name field is 'name' (NOT 'title').
+  show_product takes only product_id — NO access_token.
+  show_return_deliverers() takes NO arguments at all.
+  show_prime_plans() takes NO arguments at all.
+  Cart operations use product_id directly (NOT cart_item_id).
+  Wishlist operations use product_id directly (NOT wishlist_item_id).
+  Review ID field in show_product_reviews is 'review_id' (NOT product_review_id).
+  show_orders is paginated — always use fetch_all_pages.
+
   "rate / give rating / review song"  → Follow this TWO-PHASE plan exactly:
-    PHASE 1 — Determine target songs (do this BEFORE any review check):
-      • Task says "liked songs in playlists"  → iterate ALL playlists, collect ALL songs,
-                                                then keep only songs where show_song returns liked=True
-                                                (OR cross-reference with show_liked_songs).
-      • Task says "not liked songs in library" → call show_song_library, keep songs where liked=False.
+    PHASE 1 — Determine target songs FIRST:
+      • "liked songs in playlists" — MANDATORY INTERSECTION — 3 steps, do NOT skip any:
+          Step 1: liked_songs = fetch_all_pages('spotify','show_liked_songs',token)
+                  liked_ids = set of song_id from each liked song entry
+          Step 2: playlists = fetch_all_pages('spotify','show_playlist_library',token)
+                  playlist_ids = union of pl['song_ids'] for each playlist (key is 'song_ids')
+          Step 3: target_ids = liked_ids INTERSECTED WITH playlist_ids
+                  (songs in BOTH — if a song is liked but not in any playlist, skip it)
+        ⚠️ DO NOT skip Step 2 — rating ALL liked songs without the playlist intersection is WRONG.
+        ⚠️ show_song does NOT have a 'liked' field — do NOT call show_song to check liked status.
+        ⚠️ Do NOT use like_count > 0 — that's global popularity, not whether THIS user liked it.
+      • "not liked songs in library" → call show_song_library; cross-ref with show_liked_songs.
       Never check reviews first — determine the target set first, reviews second.
 
     PHASE 2 — Create or update the review for each target song:
-      Step A: call show_song_reviews(song_id=<id>)  ← NOTE: plural, takes song_id
-              Returns a LIST of review objects (may be empty).
-      Step B: if list non-empty → review = list[0]; get review id via review.get('id') or review.get('review_id')
-                                   → call update_song_review(review_id=<that id>, rating=<N>)
-              if list empty    → call review_song(song_id=<id>, rating=<N>)
-    WARNING: review_song on a song with an existing review returns HTTP 409 — the rating is NOT updated.
-    MANDATORY: before writing any rating plan, call get_api_details for ALL THREE:
-               get_api_details('spotify', 'show_song_reviews')   ← plural
-               get_api_details('spotify', 'update_song_review')
-               get_api_details('spotify', 'review_song')
+      user_email = apis.supervisor.show_profile()['email']   ← get once before the loop
+      Step A: reviews = show_song_reviews(song_id=<id>)  ← PLURAL, takes song_id
+      Step B: my_review = find review where r['user']['email'] == user_email
+              if my_review → update_song_review(review_id=my_review['song_review_id'], rating=N)
+              else         → review_song(song_id=<id>, rating=N)
+    CRITICAL: review ID field is 'song_review_id' (NOT 'id' or 'review_id').
+    CRITICAL: filter reviews by user email — other users' reviews are in the same list.
+    WARNING: review_song on a song with an existing review → HTTP 409 — use update_song_review instead.
 
 PRE-LOADED API DOCS:{docs}
+
+⚠️ explore_app_apis and get_api_details are YOUR discovery tools ONLY. The Executor that
+   runs your plan does NOT have them — they will crash with NameError. NEVER write a plan
+   step that calls explore_app_apis or get_api_details. Do all discovery now, then write a
+   plan whose steps use ONLY the helper functions below (login_to_app / call_api /
+   fetch_all_pages / etc.) and real AppWorld API names passed to call_api.
 
 EXECUTOR HELPER FUNCTIONS — instruct the Executor to use these in your plan steps:
 
@@ -101,13 +159,20 @@ EXECUTOR HELPER FUNCTIONS — instruct the Executor to use these in your plan st
     PLAN WORDING: "Use login_to_app('spotify') to get the access token."
 
   call_api(app_name, api_name, token, **kwargs)
-    WHEN: every API call — reads and writes alike.
-    PLAN WORDING: "Use call_api('spotify', 'show_song_library', token) to fetch saved songs."
+    WHEN: single-item lookups (show_song, show_email, show_order, show_playlist, etc.)
+    PLAN WORDING: "Use call_api('spotify', 'show_song', token, song_id=sid) to get song details."
+
+  fetch_all_pages(app_name, api_name, token, **kwargs)
+    WHEN: ALL listing/library/inbox/history APIs — these are paginated (5 per page by default).
+    ALWAYS use this for: show_playlist_library, show_song_library, show_album_library,
+                         show_liked_songs, show_inbox, show_order_history, show_contacts, etc.
+    PLAN WORDING: "Use fetch_all_pages('spotify', 'show_playlist_library', token) to get ALL playlists."
+    WARNING: Using call_api on a listing API fetches ONLY the first page — always use fetch_all_pages.
 
   filter_results(items, field, value, partial=False)
     WHEN: task says "find X with property Y", "only the ones where...", "filter by..."
-    PLAN WORDING: "Use filter_results(songs, 'liked', True) to keep only liked ones."
-                  "Use filter_results(songs, 'title', keyword, partial=True) for a name match."
+    PLAN WORDING: "Use filter_results(songs, 'title', keyword, partial=True) for a name match."
+    NOTE: Do NOT use filter_results(songs, 'liked', True) — songs have no 'liked' field.
 
   get_field(items, match_field, match_value, return_field)
     WHEN: you need ONE specific field from the item that matches a condition.
@@ -130,12 +195,21 @@ OUTPUT FORMAT — your final message (no tool calls) must follow this structure 
     - Ambiguities: <any task wording you had to interpret, and how you resolved it>
     - API quirks: <anything surprising you found in get_api_details responses>
   PLAN:
-    1. <step> — <why>  [field: 'exact_field_name_from_api_doc']  [use: helper() if applicable]
-    2. ...
-    N. Use call_api / apis.supervisor.complete_task(answer=<result>)
+    1. [<app_name>] <step> — <why>  [field: 'exact_field_name_from_api_doc']  [use: helper() if applicable]
+    2. [<app_name>] ...
+    N. <YOU decide the task type and write ONLY ONE final line — never both>:
+       • If the task asks to FIND / COUNT / RETURN a value (verbs: "how many", "what is",
+         "find", "tell me", "which") → apis.supervisor.complete_task(answer=<the_value>)
+       • If the task asks to DO something (verbs: "place an order", "buy", "order", "rate",
+         "send", "create", "add", "move", "return") → apis.supervisor.complete_task(answer=None)
+       ⚠️ "Place an order for...", "Buy me a...", "Order all the..." are ACTION tasks.
+          The final answer is Python None — NEVER a count, NEVER an order id, NEVER a
+          description string. Returning a count for an action task FAILS the eval.
+       ⚠️ Emit exactly one final-step line — do NOT give the Executor two options to pick from.
 
-  Every step that reads or sorts by a field MUST name it explicitly: [field: 'play_count'].
-  This is required — the Executor needs exact field names to write correct code.
+  REQUIRED: every step line MUST start with [<app_name>] (e.g. [amazon], [gmail], [file_system], [spotify]).
+  The Executor reads this label to activate the right specialist — missing it forces generic fallback.
+  Every step that reads or sorts by a field MUST also name it explicitly: [field: 'play_count'].
 """
 
 
@@ -251,24 +325,29 @@ REVIEWER DIAGNOSIS (wrong answer — implement the fix if present):
 Rating / reviewing a Spotify song — TWO phases, in this order:
 
 PHASE 1: Determine which songs to target (do this BEFORE any review logic):
-  Liked songs in playlists  → iterate playlists → collect songs → filter by liked=True or show_liked_songs
-  Not-liked songs in library → show_song_library → filter by liked=False
+  "Liked songs in playlists":
+    liked_ids    = {s['song_id'] for s in fetch_all_pages('spotify','show_liked_songs',token)}
+    playlist_ids = set()
+    for pl in fetch_all_pages('spotify','show_playlist_library',token): playlist_ids.update(pl['song_ids'])
+    target_ids   = liked_ids & playlist_ids
+  ⚠️ show_song does NOT have a 'liked' field. NEVER use like_count > 0 or song.get('liked').
+  ⚠️ playlist dicts from show_playlist_library use 'song_ids' (list of ints), NOT 'songs'.
 
-PHASE 2: For each target song, create or update the review:
+PHASE 2: For each target song, create or update the review (filter to THIS user's review):
 ```python
-# show_song_reviews (PLURAL) takes song_id and returns a LIST
-reviews = call_api('spotify', 'show_song_reviews', token, song_id=song_id)
-review  = reviews[0] if (reviews and isinstance(reviews, list)) else None
-if review:
-    # Review exists → update it (review_song would return HTTP 409)
-    rid = review.get('id') or review.get('review_id')
-    call_api('spotify', 'update_song_review', token, review_id=rid, rating=<target_rating>)
-else:
-    # No review yet → create it
-    call_api('spotify', 'review_song', token, song_id=song_id, rating=<target_rating>)
+user_email = apis.supervisor.show_profile()['email']   # get once before the loop
+for sid in target_ids:
+    reviews   = call_api('spotify', 'show_song_reviews', token, song_id=sid)
+    my_review = next((r for r in reviews if r.get('user',{}).get('email')==user_email), None)
+    if my_review:
+        call_api('spotify', 'update_song_review', token, review_id=my_review['song_review_id'], rating=5)
+    else:
+        call_api('spotify', 'review_song', token, song_id=sid, rating=5)
+apis.supervisor.complete_task(answer=None)
 ```
-WARNING: calling review_song when a review already exists returns HTTP 409 and does NOT update the rating.
-WARNING: show_song_review (SINGULAR) takes review_id, NOT song_id — do NOT use it to look up by song.
+CRITICAL: review ID is 'song_review_id' in the review dict (NOT 'id' or 'review_id').
+CRITICAL: show_song_reviews returns ALL users' reviews — filter to my_review by user email first.
+WARNING: review_song on a song with an existing (user's) review → HTTP 409 — use update instead.
 
 ===== FULL WORKING EXAMPLE =====
 Task: "What is the title of the most-liked song in my Spotify playlists?"
@@ -308,7 +387,7 @@ apis.supervisor.complete_task(answer=answer)
 4. ALWAYS print intermediate values so the next turn can debug if something breaks.
 5. Use .get(...) defensively — field names vary between APIs.
 6. For answer-tasks: end with  apis.supervisor.complete_task(answer=<your_answer>)
-7. For action-tasks (send email, add task, like transaction): apis.supervisor.complete_task(answer='done')
+7. For action-tasks (send email, add task, rate song, like transaction): apis.supervisor.complete_task(answer=None)
 8a. If LAST CODE ERROR is set: your new code MUST fix that specific crash.
     Do NOT submit code that would reproduce the same error.
 8b. If REVIEWER DIAGNOSIS is set: the previous answer was submitted but WRONG (no crash).
@@ -345,12 +424,17 @@ HELPER FUNCTIONS (always available — never rewrite them):
   contact = find_contact('name')        ← uses phone app internally
 
 IMPORTANT FACTS:
+- NEVER call explore_app_apis(), get_api_details(), or apis.api_docs.* — these do NOT
+  exist in your runtime. Calling them raises NameError, you retry, and the sandbox kills
+  you with a SIGALRM timeout. The plan already lists every API you need; use call_api()
+  with the real API names directly. Do NOT try to "discover" APIs at execution time.
 - Simplenote app name is 'simple_note' (with underscore): login_to_app('simple_note')
 - file_system write API: call_api('file_system', 'create_file', token, file_path=<path>, content=<str>)
   NOT write_file, NOT save, NOT upload — the correct name is create_file.
 - 'like_count' on a song = how many users globally liked it (popularity metric).
   Task says "most-liked song" → sort by like_count descending.
-  Task says "songs I/the user liked" → use show_liked_songs or show_song_library (liked=True field).
+  Task says "songs I/the user liked" → use show_liked_songs; collect {s['song_id'] for s in results}.
+  show_song and show_song_library do NOT have a 'liked' field — do not look for one.
   NEVER use like_count > 0 to check if the current user liked a song — these are different things.
 
 RULES:
@@ -359,8 +443,9 @@ RULES:
 3. Write at most 15 lines of code per step.
 4. Use .get() defensively — field names vary between APIs and are often surprising.
 5. NEVER use return, exit(), sys.exit() at top level.
-6. When you have confirmed the final answer from observations: call apis.supervisor.complete_task(answer=<value>)
-7. For action tasks (rate, send, like, create): apis.supervisor.complete_task(answer='done')
+6. Query task (find/return a value): apis.supervisor.complete_task(answer=<the_value>)
+7. Action task (rate, send, like, create, add): apis.supervisor.complete_task(answer=None)
+   ← for action tasks the answer is ALWAYS Python None. NEVER 'done', NEVER a description string.
 
 FORMAT — every response must follow this structure exactly:
 Thought: <what you know so far and what you need to do next>

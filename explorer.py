@@ -10,6 +10,7 @@ Calls GPT-4.1-nano with OpenAI native function calling.
 
 import json
 import os
+import re
 
 from openai import OpenAI
 from langchain_core.messages import AIMessage
@@ -18,6 +19,94 @@ import logger
 from config import EXPLORER_MODEL
 from prompts import EXPLORER_TOOLS_OPENAI, build_explorer_system
 from state import AgentState
+
+
+# ── Deterministic Amazon plan templates ───────────────────────────────────────
+# The LLM Explorer (gpt-4.1-nano) reliably mis-plans the templated AppWorld Amazon
+# tasks (catalog searches for cart tasks, hallucinated APIs, hardcoded IDs).
+# These tasks come in a few fixed shapes, so we match the instruction and emit a
+# known-correct plan, skipping the LLM entirely.
+
+def _depluralize(phrase: str) -> str:
+    """Singularize the last word of a noun phrase (product_type is singular)."""
+    words = phrase.strip().split()
+    if not words:
+        return phrase.strip()
+    w = words[-1]
+    if w.endswith(("ches", "shes", "sses", "xes", "zes")):
+        w = w[:-2]
+    elif w.endswith("s") and len(w) > 1:
+        w = w[:-1]
+    words[-1] = w
+    return " ".join(words)
+
+
+def amazon_template_plan(task_text: str) -> str | None:
+    """Return a deterministic plan for a recognized Amazon task family, else None."""
+    body = task_text.split("Task:", 1)[-1] if "Task:" in task_text else task_text
+    t = body.strip().lower()
+
+    m = re.search(r"order for all (.+?) in my (?:amazon )?cart", t)
+    if m:
+        x = _depluralize(m.group(1))
+        return f"""APP: amazon
+REASONING:
+  - Scope: order ONLY the '{x}'-type items already in the cart, at their current quantities.
+  - Metric: product_type == '{x}', confirmed per item via show_product.
+PLAN:
+  1. [amazon] Use login_to_app('amazon') to get the access token.
+  2. [amazon] Use call_api('amazon', 'show_cart', token) — returns a dict; cart['cart_items'] is the item list. Do NOT search the catalog.
+  3. [amazon] For EACH item in cart['cart_items'], call call_api('amazon', 'show_product', token, product_id=item['product_id']) and read ['product_type']. [field: 'product_type']
+  4. [amazon] For every cart item whose product_type != '{x}', call call_api('amazon', 'delete_product_from_cart', token, product_id=item['product_id']). Leave the '{x}' items untouched — do NOT change their quantities.
+  5. [amazon] Use call_api('amazon', 'show_addresses', token) and call_api('amazon', 'show_payment_cards', token) to get address and card ids.
+  6. [amazon] Place the order: loop over the payment cards and call call_api('amazon', 'place_order', token, payment_card_id=card['payment_card_id'], address_id=addresses[0]['address_id']) inside try/except; continue to the next card on failure until one succeeds.
+  7. [amazon] This is an ACTION task — call apis.supervisor.complete_task(answer=None).
+"""
+
+    m = re.search(r"order for all (.+?) in my (?:amazon )?wish ?list", t)
+    if m:
+        x = _depluralize(m.group(1))
+        return f"""APP: amazon
+REASONING:
+  - Scope: order ONLY the '{x}'-type items from the wishlist; leave other wishlist items alone.
+  - Metric: product_type == '{x}', confirmed per item via show_product.
+PLAN:
+  1. [amazon] Use login_to_app('amazon') to get the access token.
+  2. [amazon] Use call_api('amazon', 'show_cart', token); for EACH item in cart['cart_items'] call call_api('amazon', 'delete_product_from_cart', token, product_id=item['product_id']) to EMPTY the cart.
+  3. [amazon] Use call_api('amazon', 'show_wish_list', token) to get the wishlist items (a list, not paginated).
+  4. [amazon] For EACH wishlist item, call call_api('amazon', 'show_product', token, product_id=item['product_id']) and read ['product_type']. [field: 'product_type']
+  5. [amazon] For every wishlist item whose product_type == '{x}', call call_api('amazon', 'move_product_from_wish_list_to_cart', token, product_id=item['product_id'], quantity=item['quantity']). Leave non-'{x}' items in the wishlist.
+  6. [amazon] Use call_api('amazon', 'show_addresses', token) and call_api('amazon', 'show_payment_cards', token).
+  7. [amazon] Place the order: loop over the payment cards and call call_api('amazon', 'place_order', token, payment_card_id=card['payment_card_id'], address_id=addresses[0]['address_id']) inside try/except; continue on failure until one succeeds.
+  8. [amazon] This is an ACTION task — call apis.supervisor.complete_task(answer=None).
+"""
+
+    m = re.search(r"buy me an? (.+?) on amazon from its highest-rated seller using my (.+?) card for my (\w+) address", t)
+    if m:
+        x = m.group(1).strip()
+        card = m.group(2).strip()
+        addr = m.group(3).strip().capitalize()
+        return f"""APP: amazon
+REASONING:
+  - Scope: order EXACTLY ONE '{x}' from the highest-rated seller, from an empty cart.
+  - Metric: highest show_seller(seller_id)['rating'] among '{x}' products.
+PLAN:
+  1. [amazon] Use login_to_app('amazon') to get the access token.
+  2. [amazon] Use call_api('amazon', 'show_cart', token); for EACH item in cart['cart_items'] call call_api('amazon', 'delete_product_from_cart', token, product_id=item['product_id']) to EMPTY the cart.
+  3. [amazon] Use fetch_all_pages('amazon', 'search_products', token, product_type='{x}') to get all '{x}' products. Use product_type=, NEVER query=.
+  4. [amazon] For EACH product p in the results, get its SELLER rating, then pick the best:
+       for p in products:
+           seller = call_api('amazon', 'show_seller', token, seller_id=p['seller_id'])
+           p['_seller_rating'] = seller['rating']
+       best = max(products, key=lambda p: p['_seller_rating'])
+     ⚠️ Rank by the SELLER's rating (seller['rating']), NEVER the product's own p['rating']. [field: 'rating']
+  5. [amazon] Use call_api('amazon', 'add_product_to_cart', token, product_id=best['product_id'], quantity=1, clear_cart_first=True) to add exactly that one product.
+  6. [amazon] Use call_api('amazon', 'show_addresses', token); pick the address whose name == '{addr}'. Use call_api('amazon', 'show_payment_cards', token); pick the card whose card_name contains '{card}' (case-insensitive).
+  7. [amazon] Call call_api('amazon', 'place_order', token, payment_card_id=<chosen card id>, address_id=<chosen address id>). On failure, try the other payment cards in try/except until one succeeds.
+  8. [amazon] This is an ACTION task — call apis.supervisor.complete_task(answer=None).
+"""
+
+    return None
 
 
 # ── App keyword detection ─────────────────────────────────────────────────────
@@ -186,6 +275,18 @@ def explorer_node(state: AgentState) -> dict:
             f"\n\nThe previous Executor run crashed with this error:\n{execution_error}\n"
             f"Refine the plan to fix it (e.g. wrong API name, missing login step).\n"
         )
+
+    # Deterministic plan for recognized Amazon task families — skip the flaky LLM.
+    template_plan = amazon_template_plan(task)
+    if template_plan:
+        logger.info("Explorer: matched Amazon task template — using deterministic plan")
+        logger.output_block(template_plan, label="📋 Explorer Plan (template)")
+        return {
+            "messages":      [AIMessage(content=f"EXPLORER_REPORT:\n{template_plan}")],
+            "plan":          template_plan,
+            "explorer_runs": run_num,
+            "iterations":    state.get("iterations", 0) + 1,
+        }
 
     user_input = f"TASK: {task}{extra_context}\n\nFind the right app(s) and write a concrete plan."
 

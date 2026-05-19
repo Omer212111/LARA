@@ -6,7 +6,8 @@ These functions handle the most common AppWorld patterns so Qwen writes minimal 
 
 Available helpers (always in scope inside generated code):
   login_to_app(app_name)                              → access_token
-  call_api(app_name, api_name, token, **kwargs)       → API response (dict/list)
+  call_api(app_name, api_name, token, **kwargs)       → API response (dict/list) — single call only
+  fetch_all_pages(app_name, api_name, token, **kwargs)→ ALL pages merged — use for listing APIs!
   filter_results(items, field, value, partial=False)  → filtered list
   get_field(items, mf, mv, rf, default=None)          → single field value
   sort_by(items, field, reverse=False)                → sorted list
@@ -32,9 +33,43 @@ def call_api(app_name, api_name, token, **kwargs):
     """Call any AppWorld API with access_token injected.
     Works for both read and write/update operations.
     Example: songs = call_api('spotify', 'show_liked_songs', token)
-    Example: call_api('spotify', 'like_song', token, song_id='123')"""
+    Example: call_api('spotify', 'like_song', token, song_id=123)"""
     func = getattr(getattr(apis, app_name), api_name)
     return func(access_token=token, **kwargs)
+
+
+def fetch_all_pages(app_name, api_name, token, **kwargs):
+    """Fetch ALL pages from a paginated AppWorld API.
+    MANY listing APIs (show_playlist_library, show_order_history, show_inbox, etc.)
+    are paginated and return only 5 results per page by default.
+    Always use this instead of call_api when fetching a full list.
+    Example: playlists = fetch_all_pages('spotify', 'show_playlist_library', token)
+    Example: emails    = fetch_all_pages('gmail', 'show_inbox', token)
+    Uses page_index parameter starting from 0 (AppWorld convention).
+
+    Safe on NON-paginated endpoints too:
+    - if the API returns a dict (e.g. show_cart) → returns that dict unchanged.
+    - if the API ignores page_index and returns the SAME list every page
+      (e.g. show_wish_list) → returns it once, no duplication."""
+    func = getattr(getattr(apis, app_name), api_name)
+    results = []
+    first_page = None
+    page_index = 0
+    while page_index < 20:  # safety cap
+        page_data = func(access_token=token, page_index=page_index, **kwargs)
+        # Non-paginated dict endpoint (show_cart, show_order, ...) — return as-is.
+        if isinstance(page_data, dict):
+            return page_data
+        if not page_data:
+            break
+        # Non-paginated list endpoint returns the SAME list for every page_index.
+        if page_index == 0:
+            first_page = page_data
+        elif page_data == first_page:
+            break
+        results.extend(page_data)
+        page_index += 1
+    return results
 
 
 def filter_results(items, field, value, partial=False):
