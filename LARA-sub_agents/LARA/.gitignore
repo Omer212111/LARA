@@ -1,0 +1,21 @@
+# Environments
+.env
+.venv/
+venv/
+env/
+venv_linux/
+
+# Python caching
+__pycache__/
+*.pyc
+
+# IDEs
+.idea/
+.vscode/
+
+# LARA Project Exclusions
+experiments/
+trace_output.json
+*.rar
+*.txt
+dashboard.html

@@ -1,0 +1,292 @@
+{
+  "schema_version": 1,
+  "last_updated": "2026-05-22",
+  "notes": "Category-to-fix mapping for LARA. Cross-references analysis/error_categories.json by category_code. Each category lists one or more candidate fixes, ranked implicitly by tractability×fit. Status field tracks whether each fix has been applied. tractability scale: 5 = prompt-only additive change, 3 = prompt rewrite or single orchestrator behavior change, 1 = multi-file or contract-changing. Surface keys: explorer_prompt, venmo_specialist, phone_specialist, gmail_specialist, spotify_specialist, amazon_specialist, file_system_specialist, executor_react_prompt, orchestrator_guard, orchestrator_recovery, bootstrap_helpers.",
+  "mappings": [
+    {
+      "category_code": "E-PLAN-WRONG-API",
+      "fixes": [
+        {
+          "surface": "explorer_prompt",
+          "description": "Add explicit antipattern warnings naming the wrong API and pointing to the right one (e.g. 'NEVER use show_contact_relationships to get people; use search_contacts(relationship=...).').",
+          "tractability": 5,
+          "status": "applied",
+          "applied_in_run": "bg22f2uo7",
+          "applied_in_change": "prompts.py SEMANTIC API SELECTION — group-vs-singular contact rule",
+          "rationale": "Prompt-only; the wrong API names are stable across runs so we can enumerate them."
+        }
+      ]
+    },
+    {
+      "category_code": "E-PLAN-PLACEHOLDER",
+      "fixes": [
+        {
+          "surface": "explorer_prompt",
+          "description": "Add to OUTPUT FORMAT: every plan step must use concrete kwargs (no '<once identified>', no empty strings, no future-tense). Plans with placeholder language are rejected and re-prompted.",
+          "tractability": 5,
+          "status": "proposed",
+          "rationale": "The model isn't aware that placeholders cause downstream fabrication. Explicit rule + concrete examples should help."
+        },
+        {
+          "surface": "orchestrator_guard",
+          "description": "Detect placeholder patterns in the plan ('(once identified)', empty-string args) and force re-planning before dispatching to Executor.",
+          "tractability": 3,
+          "status": "proposed",
+          "rationale": "Stronger guarantee but requires plan inspection in the supervisor."
+        }
+      ]
+    },
+    {
+      "category_code": "E-PLAN-PLURALIZATION",
+      "fixes": [
+        {
+          "surface": "explorer_prompt",
+          "description": "Update the group-lookup pattern to ALWAYS use the singular kwarg ('roommate' not 'roommates'), and include both concrete examples + a 'NEVER pluralize the relationship value' rule.",
+          "tractability": 5,
+          "status": "proposed",
+          "rationale": "The current prompt uses a <singular> placeholder; the model occasionally writes the plural form anyway."
+        },
+        {
+          "surface": "bootstrap_helpers",
+          "description": "Wrap search_contacts via a helper that auto-singularizes relationship= values, so plural plans still work.",
+          "tractability": 3,
+          "status": "proposed",
+          "rationale": "Defensive — handles the case at runtime even if the plan slips up. More invasive."
+        }
+      ]
+    },
+    {
+      "category_code": "E-PLAN-NO-CONTACT-LOOKUP",
+      "fixes": [
+        {
+          "surface": "explorer_prompt",
+          "description": "Add to SEMANTIC API SELECTION: ANY task referencing a group word (roommate/coworker/friend/sibling/parent) MUST include a phone search_contacts(relationship=...) step. List the group words explicitly.",
+          "tractability": 5,
+          "status": "applied",
+          "applied_in_run": "bg22f2uo7",
+          "applied_in_change": "prompts.py contact-resolution lines",
+          "rationale": "Same surface as the group-vs-singular rule. Already partially landed; may need strengthening."
+        }
+      ]
+    },
+    {
+      "category_code": "E-PLAN-DATE-NOT-WIRED",
+      "fixes": [
+        {
+          "surface": "explorer_prompt",
+          "description": "Add a TIME-RELATIVE WINDOWS pattern block requiring two separate plan steps: (a) phone get_current_date_and_time computes absolute YYYY-MM-DD strings, (b) the next app step CONSUMES those strings via min_created_at / max_created_at kwargs.",
+          "tractability": 5,
+          "status": "applied",
+          "applied_in_run": "bg22f2uo7",
+          "applied_in_change": "prompts.py TIME-RELATIVE WINDOWS block",
+          "rationale": "Prompt-only, additive. Solves the cross-app contamination where venmo/gmail steps fall back to datetime.now()."
+        }
+      ]
+    },
+    {
+      "category_code": "E-WRONG-ENTITY",
+      "fixes": [
+        {
+          "surface": "explorer_prompt",
+          "description": "Add a VENMO PATTERNS block disambiguating: 'payments I received' (past tense, settled transactions) → show_transactions(direction='received'); 'payment requests' (pending, awaiting approval) → show_received_payment_requests. List the action verbs that distinguish them.",
+          "tractability": 5,
+          "status": "proposed",
+          "rationale": "Highest priority outstanding fix (priority A in 2026-05-22 prioritization, score 35 under safety-driven weights). Solves the afc0fce family root cause."
+        },
+        {
+          "surface": "venmo_specialist",
+          "description": "Add to the specialist prompt: 'For tasks involving payments-received-in-time-window, use show_transactions(direction=received), NOT show_received_payment_requests. The latter is for pending bills to approve/deny.'",
+          "tractability": 5,
+          "status": "proposed",
+          "rationale": "Backup at execution time — catches the issue if the Explorer plan still picks the wrong API."
+        }
+      ]
+    },
+    {
+      "category_code": "E-WRONG-DATA-SOURCE",
+      "fixes": [
+        {
+          "surface": "venmo_specialist",
+          "description": "Clarify the boundary: show_social_feed returns FRIENDS' transactions (where neither party is you). show_transactions returns YOUR transactions (sent + received). Tasks about 'transactions involving X' usually need BOTH sources.",
+          "tractability": 5,
+          "status": "proposed",
+          "rationale": "Already in the specialist prompt at a high level; tighten the disambiguation language."
+        },
+        {
+          "surface": "explorer_prompt",
+          "description": "Add to SEMANTIC API SELECTION: tasks about 'transactions involving <person>' should plan a UNION of show_transactions and show_social_feed; tasks restricted to 'social feed' use only the feed.",
+          "tractability": 5,
+          "status": "proposed",
+          "rationale": "Plan-level fix is cleaner; specialist-level can be supplemental."
+        }
+      ]
+    },
+    {
+      "category_code": "E-EXEC-INVENT-API",
+      "fixes": [
+        {
+          "surface": "orchestrator_recovery",
+          "description": "When the executor's code output contains 'No API named X', inject a strong recovery message that (a) names the active specialist's available APIs, (b) instructs the model to STOP guessing and re-read the specialist prompt's API list.",
+          "tractability": 3,
+          "status": "proposed",
+          "rationale": "Mid-run intervention. Less invasive than catching it at plan time because the failure pattern is consistent: model invents one wrong name, gets the error, immediately invents another."
+        },
+        {
+          "surface": "specialist_prompts",
+          "description": "Add to each specialist prompt: 'If you get No API named X — STOP. The complete API list is above. Pick the closest match by name; do NOT guess new names.'",
+          "tractability": 5,
+          "status": "proposed",
+          "rationale": "Prompt-only; relies on the model's instruction-following."
+        }
+      ]
+    },
+    {
+      "category_code": "E-EXEC-FABRICATE",
+      "fixes": [
+        {
+          "surface": "executor_react_prompt",
+          "description": "Add a 'NEVER fabricate data' rule: if a plan step asks you to use names/emails/IDs that you don't have, STOP and look them up via the appropriate app. Specifically forbid stock names (Alice/Bob) and example domains (@example.com).",
+          "tractability": 5,
+          "status": "proposed",
+          "rationale": "The model fabricates when the plan has placeholders; this is a backstop in case E-PLAN-PLACEHOLDER fix doesn't land."
+        }
+      ]
+    },
+    {
+      "category_code": "E-EXEC-HELPER-AS-API",
+      "fixes": [
+        {
+          "surface": "executor_react_prompt",
+          "description": "Document the bootstrap helpers explicitly in the executor system prompt: 'find_contact, login_to_app, fetch_all_pages, call_api are HELPERS, not APIs. NEVER call them via call_api(...).' Include a side-by-side example.",
+          "tractability": 5,
+          "status": "proposed",
+          "rationale": "Currently the helpers are only listed in executor_helpers.py; the executor prompt assumes the model figures it out from usage."
+        }
+      ]
+    },
+    {
+      "category_code": "E-EXEC-WRONG-QUERY",
+      "fixes": [
+        {
+          "surface": "phone_specialist",
+          "description": "Add to PhoneExecutor prompt: 'NEVER use search_contacts(query=YOUR_OWN_NAME) — that returns surname matches, not contacts of a relationship type. For group lookup ALWAYS use relationship=. For one-person lookup by name, use find_contact(name).'",
+          "tractability": 5,
+          "status": "proposed",
+          "rationale": "Specialist prompt is the right surface — the model only writes this antipattern when it's already in the phone step."
+        }
+      ]
+    },
+    {
+      "category_code": "E-EXEC-OVER-ACT",
+      "fixes": [
+        {
+          "surface": "venmo_specialist",
+          "description": "Add a 'fail closed' rule: if a contact-resolution step returned an empty group OR if the filter set is unknown, DO NOT perform actions on the unfiltered superset. Call complete_task(answer=None) with an explanatory note instead.",
+          "tractability": 5,
+          "status": "proposed",
+          "rationale": "Specialist-level; co-targets E-NO-FAIL-CLOSED."
+        }
+      ]
+    },
+    {
+      "category_code": "E-EXEC-WRONG-TOKEN",
+      "fixes": [
+        {
+          "surface": "bootstrap_helpers",
+          "description": "Wrap call_api / fetch_all_pages with auto-retry-on-401: on a 401 response, automatically re-login the relevant app and retry once.",
+          "tractability": 3,
+          "status": "proposed",
+          "rationale": "Helper-level fix; transparent to all specialists. Token expiry shouldn't be the model's problem."
+        },
+        {
+          "surface": "executor_react_prompt",
+          "description": "Add a rule: 'If you get 401 token expired, IMMEDIATELY call login_to_app(<app>) and retry the failed call. Do NOT continue with the expired token.'",
+          "tractability": 5,
+          "status": "proposed",
+          "rationale": "Prompt-only fallback if the helper change is too invasive."
+        }
+      ]
+    },
+    {
+      "category_code": "E-ID-TYPE-MISMATCH",
+      "fixes": [
+        {
+          "surface": "venmo_specialist",
+          "description": "Add an explicit id-table to the specialist prompt: payment_request_id is for approve/deny/update/delete payment requests; transaction_id is for like/comment/show_transaction. NEVER pass one as the other.",
+          "tractability": 5,
+          "status": "proposed",
+          "rationale": "Specialist-level; addresses the symptom of E-WRONG-ENTITY at execution time."
+        }
+      ]
+    },
+    {
+      "category_code": "E-PAGINATION-MISSED",
+      "fixes": [
+        {
+          "surface": "specialist_prompts",
+          "description": "Strengthen the paginated-API list in each specialist prompt and add 'ALWAYS use fetch_all_pages for these — call_api fetches ONLY the first 5 items'.",
+          "tractability": 5,
+          "status": "proposed",
+          "rationale": "Lists exist in Venmo/Phone specialists; the issue is the model not consulting them. May need a concrete example showing the difference."
+        },
+        {
+          "surface": "bootstrap_helpers",
+          "description": "Make call_api auto-detect when it's being called on a known paginated API and warn (or auto-paginate). Hard to detect without an allow-list.",
+          "tractability": 1,
+          "status": "proposed",
+          "rationale": "More invasive; risk of changing behavior on edge cases. Deprioritized."
+        }
+      ]
+    },
+    {
+      "category_code": "E-API-PARAM-NONE",
+      "fixes": [
+        {
+          "surface": "bootstrap_helpers",
+          "description": "Strip None-valued kwargs in call_api / fetch_all_pages before passing to the API. Optional params default correctly when omitted.",
+          "tractability": 3,
+          "status": "proposed",
+          "rationale": "Helper-level fix is cleanest — every specialist benefits. Easy to implement with a dict comprehension."
+        },
+        {
+          "surface": "executor_react_prompt",
+          "description": "Add a rule: 'NEVER pass None as an API kwarg value. Omit the kwarg entirely if you don't have a value.'",
+          "tractability": 5,
+          "status": "proposed",
+          "rationale": "Prompt fallback if the helper change isn't taken."
+        }
+      ]
+    },
+    {
+      "category_code": "E-LINEAR-RETRY",
+      "fixes": [
+        {
+          "surface": "orchestrator_recovery",
+          "description": "Detect when two consecutive ReAct steps both produced errors with >70% code similarity. Inject a strong message: 'You just retried the same approach. Try a DIFFERENT API or read the prompt's pattern list.'",
+          "tractability": 3,
+          "status": "proposed",
+          "rationale": "Mid-run intervention; the executor doesn't currently get any signal that it's looping."
+        }
+      ]
+    },
+    {
+      "category_code": "E-NO-FAIL-CLOSED",
+      "fixes": [
+        {
+          "surface": "orchestrator_guard",
+          "description": "For ACTION tasks, intercept complete_task(answer=None) calls if no action API (like_*, create_*, send_*, place_order, approve_*, deny_*) executed successfully in any step. Strip the call and inject 'You have not taken any action — continue executing the plan or explain why action is impossible.'",
+          "tractability": 3,
+          "status": "proposed",
+          "rationale": "Sibling to the existing premature-complete_task guard but with an action-success requirement. Same code surface in base.py."
+        },
+        {
+          "surface": "executor_react_prompt",
+          "description": "Add a rule: 'NEVER call complete_task on an ACTION task without at least one successful state-changing API call.'",
+          "tractability": 5,
+          "status": "proposed",
+          "rationale": "Prompt-only first attempt. Cheaper but unreliable."
+        }
+      ]
+    }
+  ]
+}

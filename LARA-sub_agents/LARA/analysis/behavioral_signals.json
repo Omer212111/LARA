@@ -1,0 +1,107 @@
+{
+  "schema_version": 1,
+  "last_updated": "2026-05-22",
+  "notes": "Behavioral counters for LARA benchmark runs. Each counter measures a signal we tracked manually during the 2026-05-21..22 venmo-5 iteration. Extended during 'manual discovery' phases (when we make a substantial code change or hit a new task family). The autonomous loop reads this config to compute uniform panel deltas in 'automated improvement' phases. Scopes: all_outputs (every ReAct step's output), all_code (every step's code), all_plans (Explorer plans), all_traces (everything concatenated). pattern_type: substring or regex.",
+  "counters": [
+    {
+      "name": "phone_login_401",
+      "description": "Phone login 401 errors. Should be 0 after the username-routing fix in executor_helpers.py.",
+      "kind": "antipattern",
+      "scope": "all_outputs",
+      "pattern_type": "substring",
+      "patterns": ["Invalid credentials"],
+      "added_in_run": "ba1uv9gmu",
+      "added_for": "phone-auth-fix verification (Experiment A)"
+    },
+    {
+      "name": "search_contacts_relationship",
+      "description": "Calls to search_contacts with relationship=...  — the desired pattern for group resolution. Matches both call_api(...) and fetch_all_pages(...) wrappers since LARA APIs go through bootstrap helpers.",
+      "kind": "good_pattern",
+      "scope": "all_code",
+      "pattern_type": "regex",
+      "patterns": ["'search_contacts'[^\\n]*relationship\\s*="],
+      "added_in_run": "bg22f2uo7",
+      "added_for": "Explorer prompt change — concrete group-lookup examples"
+    },
+    {
+      "name": "show_contact_relationships_calls",
+      "description": "Calls to show_contact_relationships. Antipattern — it returns relationship TYPES, not people. Should shrink as search_contacts(relationship=...) takes over.",
+      "kind": "antipattern",
+      "scope": "all_code",
+      "pattern_type": "substring",
+      "patterns": ["show_contact_relationships"],
+      "added_in_run": "bg22f2uo7",
+      "added_for": "Explorer prompt change — group-lookup antipattern tracking"
+    },
+    {
+      "name": "get_current_date_and_time",
+      "description": "Sandbox-clock adoption. Should grow as the two-step date pattern lands in plans.",
+      "kind": "good_pattern",
+      "scope": "all_code",
+      "pattern_type": "substring",
+      "patterns": ["get_current_date_and_time"],
+      "added_in_run": "bg22f2uo7",
+      "added_for": "Explorer prompt change — TIME-RELATIVE WINDOWS pattern verification"
+    },
+    {
+      "name": "datetime_now",
+      "description": "Wall-clock antipattern. The sandbox clock is not today's date — datetime.now() returns the wrong year.",
+      "kind": "antipattern",
+      "scope": "all_code",
+      "pattern_type": "regex",
+      "patterns": ["datetime\\.now\\("],
+      "added_in_run": "bg22f2uo7",
+      "added_for": "Explorer prompt change — wall-clock fallback detection"
+    },
+    {
+      "name": "fetch_all_pages",
+      "description": "Pagination discipline. Tracks how often the executor reaches for fetch_all_pages on listing APIs.",
+      "kind": "good_pattern",
+      "scope": "all_code",
+      "pattern_type": "substring",
+      "patterns": ["fetch_all_pages("],
+      "added_in_run": "manual_discovery_2026-05-22",
+      "added_for": "Pagination-discipline tracking (complement to E-PAGINATION-MISSED category)"
+    },
+    {
+      "name": "premature_complete_task_strips",
+      "description": "Orchestrator strip-events from the premature-complete_task guard (base.py). Each occurrence is a saved task that would have submitted too early.",
+      "kind": "neutral",
+      "scope": "all_outputs",
+      "pattern_type": "substring",
+      "patterns": ["Stripped premature complete_task"],
+      "added_in_run": "bv1ew2sc3",
+      "added_for": "Premature-complete_task guard observability"
+    },
+    {
+      "name": "phone_executor_dispatches",
+      "description": "Per-step dispatches to PhoneExecutor. Confirms the orchestrator routes phone steps to the right specialist.",
+      "kind": "good_pattern",
+      "scope": "react_metadata",
+      "pattern_type": "substring",
+      "patterns": ["specialist=PhoneExecutor"],
+      "added_in_run": "ba1uv9gmu",
+      "added_for": "PhoneExecutor wiring verification (Experiment B)"
+    },
+    {
+      "name": "venmo_executor_dispatches",
+      "description": "Per-step dispatches to VenmoExecutor. Co-tracked with PhoneExecutor to see how the orchestrator splits cross-app tasks.",
+      "kind": "good_pattern",
+      "scope": "react_metadata",
+      "pattern_type": "substring",
+      "patterns": ["specialist=VenmoExecutor"],
+      "added_in_run": "ba1uv9gmu",
+      "added_for": "Per-step dispatch verification"
+    },
+    {
+      "name": "no_api_named_errors",
+      "description": "Executor invented an API name that the AppWorld sandbox doesn't recognize. Antipattern; co-occurs with E-EXEC-INVENT-API.",
+      "kind": "antipattern",
+      "scope": "all_outputs",
+      "pattern_type": "substring",
+      "patterns": ["No API named"],
+      "added_in_run": "manual_discovery_2026-05-22",
+      "added_for": "Invent-API tracking; complements E-EXEC-INVENT-API category"
+    }
+  ]
+}

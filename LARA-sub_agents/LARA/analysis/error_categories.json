@@ -1,0 +1,247 @@
+{
+  "schema_version": 1,
+  "last_updated": "2026-05-22",
+  "notes": "LARA failure-category dictionary, seeded from the 2026-05-22 venmo-5 deep-dive (run bv1ew2sc3). Each category names a recurrent failure mode observed in the orchestrator's run log. The parser uses 'signatures' (substring matches against the run trace) to auto-tag occurrences; 'seen_in_tasks' and 'count' are maintained per analysis pass.",
+  "stages": ["plan", "execution", "recovery", "submission"],
+  "categories": [
+    {
+      "code": "E-PLAN-WRONG-API",
+      "description": "Explorer plan named a non-existent API or the wrong API for the task goal.",
+      "stage": "plan",
+      "signatures": ["show_contact_relationships"],
+      "example": {
+        "task_id": "2a163ab_1",
+        "snippet": "Plan step 3: 'call_api(phone, show_contact_relationships, ...) to identify roommates' — that API returns relationship TYPES, not people"
+      },
+      "candidate_fix_surfaces": ["explorer_prompt"],
+      "seen_in_tasks": ["2a163ab_1"],
+      "count": 1
+    },
+    {
+      "code": "E-PLAN-PLACEHOLDER",
+      "description": "Plan step contained placeholder language ('once identified', empty-string args, future-tense identification) that was never resolved at execution time.",
+      "stage": "plan",
+      "signatures": ["(once identified)", "(Will do this", "find_contact('')"],
+      "example": {
+        "task_id": "2a163ab_3",
+        "snippet": "Plan step 2: \"find_contact('') for each coworker (Will do this for each coworker once identified)\""
+      },
+      "candidate_fix_surfaces": ["explorer_prompt"],
+      "seen_in_tasks": ["2a163ab_3"],
+      "count": 1
+    },
+    {
+      "code": "E-PLAN-PLURALIZATION",
+      "description": "Plan passed the plural form of a relationship word ('coworkers') where the API expects the singular ('coworker').",
+      "stage": "plan",
+      "signatures": ["relationship='coworkers'", "relationship='roommates'", "relationship='siblings'", "relationship='friends'"],
+      "example": {
+        "task_id": "afc0fce_1",
+        "snippet": "Plan step 5: search_contacts(relationship='coworkers') — plural; correct form is 'coworker'"
+      },
+      "candidate_fix_surfaces": ["explorer_prompt"],
+      "seen_in_tasks": ["afc0fce_1"],
+      "count": 1
+    },
+    {
+      "code": "E-PLAN-NO-CONTACT-LOOKUP",
+      "description": "Task referenced a relationship group ('my friends/roommates/coworkers/siblings') but the plan omitted the phone search_contacts step entirely.",
+      "stage": "plan",
+      "signatures": [],
+      "example": {
+        "task_id": "afc0fce_2",
+        "snippet": "Plan never calls search_contacts; relies on 'friends' as a Venmo concept"
+      },
+      "candidate_fix_surfaces": ["explorer_prompt"],
+      "seen_in_tasks": ["afc0fce_2"],
+      "count": 1,
+      "signature_notes": "Needs structural plan check, not a substring. Detect by: task text contains group word, plan contains no phone-app step."
+    },
+    {
+      "code": "E-PLAN-DATE-NOT-WIRED",
+      "description": "Plan included a phone get_current_date_and_time step but no later step actually consumed the computed date strings.",
+      "stage": "plan",
+      "signatures": [],
+      "example": {
+        "task_id": "afc0fce_1",
+        "snippet": "Plan step 3 computes date, but later steps don't pass min_created_at/max_created_at"
+      },
+      "candidate_fix_surfaces": ["explorer_prompt"],
+      "seen_in_tasks": ["afc0fce_1"],
+      "count": 1,
+      "signature_notes": "Structural — needs plan inspection. Detect: get_current_date_and_time in plan AND no later step has min_created_at/max_created_at."
+    },
+    {
+      "code": "E-WRONG-ENTITY",
+      "description": "Plan picked the wrong entity type (e.g. payment_requests for a 'payments I received' task that needs transactions).",
+      "stage": "plan",
+      "signatures": ["show_received_payment_requests", "payment_request_id"],
+      "example": {
+        "task_id": "afc0fce_1",
+        "snippet": "Task says 'payments I received' (transactions); plan called show_received_payment_requests (pending bills)"
+      },
+      "candidate_fix_surfaces": ["explorer_prompt", "venmo_specialist"],
+      "seen_in_tasks": ["afc0fce_1", "afc0fce_2"],
+      "count": 2,
+      "signature_notes": "Co-occurs with E-ID-TYPE-MISMATCH because the wrong entity's IDs feed the action APIs."
+    },
+    {
+      "code": "E-WRONG-DATA-SOURCE",
+      "description": "Plan picked the wrong data source for the task semantics (e.g. show_social_feed-only when broader show_transactions data was needed).",
+      "stage": "plan",
+      "signatures": [],
+      "example": {
+        "task_id": "2a163ab_2",
+        "snippet": "Task expected likes on transactions involving siblings; plan restricted to social_feed which contained none of them"
+      },
+      "candidate_fix_surfaces": ["explorer_prompt", "venmo_specialist"],
+      "seen_in_tasks": ["2a163ab_2"],
+      "count": 1
+    },
+    {
+      "code": "E-EXEC-INVENT-API",
+      "description": "Executor invented an API name on retry instead of consulting docs or the specialist prompt.",
+      "stage": "execution",
+      "signatures": ["No API named", "list_available_apis"],
+      "example": {
+        "task_id": "2a163ab_1",
+        "snippet": "call_api('phone', 'show_contacts', phone_token) — 'show_contacts' does not exist"
+      },
+      "candidate_fix_surfaces": ["specialist_prompts", "orchestrator_recovery"],
+      "seen_in_tasks": ["2a163ab_1", "2a163ab_3", "afc0fce_1"],
+      "count": 3
+    },
+    {
+      "code": "E-EXEC-FABRICATE",
+      "description": "Executor invented names and emails to fill plan placeholders ('Alice', 'Bob', '@example.com').",
+      "stage": "execution",
+      "signatures": ["@example.com", "['Alice', 'Bob'", "'alice@", "'bob@", "'charlie@"],
+      "example": {
+        "task_id": "2a163ab_3",
+        "snippet": "coworker_names = ['Alice', 'Bob', 'Charlie']; coworker_emails = ['alice@example.com', ...]"
+      },
+      "candidate_fix_surfaces": ["explorer_prompt", "specialist_prompts"],
+      "seen_in_tasks": ["2a163ab_3"],
+      "count": 1
+    },
+    {
+      "code": "E-EXEC-HELPER-AS-API",
+      "description": "Executor called a bootstrap helper (find_contact, login_to_app, fetch_all_pages) as if it were an AppWorld API.",
+      "stage": "execution",
+      "signatures": ["call_api('phone', 'find_contact'", "call_api('phone', 'login_to_app'"],
+      "example": {
+        "task_id": "2a163ab_3",
+        "snippet": "call_api('phone', 'find_contact', token, name=name) — find_contact is a bootstrap helper, not a phone API"
+      },
+      "candidate_fix_surfaces": ["specialist_prompts", "executor_react_prompt"],
+      "seen_in_tasks": ["2a163ab_3"],
+      "count": 1
+    },
+    {
+      "code": "E-EXEC-WRONG-QUERY",
+      "description": "Executor searched contacts by the user's own name (or another wrong query) when trying to find a group.",
+      "stage": "execution",
+      "signatures": [],
+      "example": {
+        "task_id": "2a163ab_1",
+        "snippet": "search_contacts(query='Melissa Bailey') — searched for own name; returned random surname matches as 'potential_roommates'"
+      },
+      "candidate_fix_surfaces": ["phone_specialist", "explorer_prompt"],
+      "seen_in_tasks": ["2a163ab_1"],
+      "count": 1
+    },
+    {
+      "code": "E-EXEC-OVER-ACT",
+      "description": "When the filter set was empty or unresolved, executor performed actions on the unfiltered superset.",
+      "stage": "execution",
+      "signatures": [],
+      "example": {
+        "task_id": "2a163ab_1",
+        "snippet": "Filter for roommates failed; agent then liked ALL social feed transactions indiscriminately"
+      },
+      "candidate_fix_surfaces": ["executor_react_prompt", "venmo_specialist"],
+      "seen_in_tasks": ["2a163ab_1"],
+      "count": 1
+    },
+    {
+      "code": "E-EXEC-WRONG-TOKEN",
+      "description": "Executor reused a stale access token across many steps without re-login on 401.",
+      "stage": "execution",
+      "signatures": ["access token is missing, invalid or expired"],
+      "example": {
+        "task_id": "2a163ab_3",
+        "snippet": "Step 6: 401 'token expired'; agent re-logged in step 7 only after failing"
+      },
+      "candidate_fix_surfaces": ["bootstrap_helpers", "executor_react_prompt"],
+      "seen_in_tasks": ["2a163ab_3"],
+      "count": 1
+    },
+    {
+      "code": "E-ID-TYPE-MISMATCH",
+      "description": "Action API called with an ID from a different entity type (e.g. payment_request_id passed as transaction_id).",
+      "stage": "execution",
+      "signatures": ["You are not authorized to comment on this transaction", "You are not authorized to view this transaction"],
+      "example": {
+        "task_id": "afc0fce_1",
+        "snippet": "create_transaction_comment(transaction_id=txn['payment_request_id']) — wrong ID space; sandbox returned 422"
+      },
+      "candidate_fix_surfaces": ["explorer_prompt", "venmo_specialist"],
+      "seen_in_tasks": ["afc0fce_1", "afc0fce_2"],
+      "count": 2
+    },
+    {
+      "code": "E-PAGINATION-MISSED",
+      "description": "Paginated API called with call_api instead of fetch_all_pages → only first 5 items processed.",
+      "stage": "execution",
+      "signatures": [],
+      "example": {
+        "task_id": "2a163ab_2",
+        "snippet": "social_feed = call_api('venmo', 'show_social_feed', token) — only first page (5 items), missed sibling transactions on later pages"
+      },
+      "candidate_fix_surfaces": ["venmo_specialist", "explorer_prompt"],
+      "seen_in_tasks": ["2a163ab_2"],
+      "count": 1,
+      "signature_notes": "Hard to detect from log alone; needs paginated-API allow-list cross-check."
+    },
+    {
+      "code": "E-API-PARAM-NONE",
+      "description": "Optional API parameter explicitly passed as None → 422 validation error.",
+      "stage": "execution",
+      "signatures": ["value is not a valid email address", "user_email=None"],
+      "example": {
+        "task_id": "2a163ab_2",
+        "snippet": "show_transactions(user_email=None, min_created_at=..., ...) → 422 'value is not a valid email address'"
+      },
+      "candidate_fix_surfaces": ["bootstrap_helpers", "executor_react_prompt"],
+      "seen_in_tasks": ["2a163ab_2"],
+      "count": 1
+    },
+    {
+      "code": "E-LINEAR-RETRY",
+      "description": "After a 4xx/5xx error, executor retried the same wrong API call with a minor variation rather than reconsidering the API choice.",
+      "stage": "recovery",
+      "signatures": [],
+      "example": {
+        "task_id": "afc0fce_2",
+        "snippet": "Step 6 failed with 422 'not authorized to view'; step 7 retried the same call without find_contact check, hit same 422"
+      },
+      "candidate_fix_surfaces": ["orchestrator_recovery", "executor_react_prompt"],
+      "seen_in_tasks": ["afc0fce_2"],
+      "count": 1
+    },
+    {
+      "code": "E-NO-FAIL-CLOSED",
+      "description": "Agent called complete_task on an ACTION task with zero successful state-changes after action APIs all errored.",
+      "stage": "submission",
+      "signatures": [],
+      "example": {
+        "task_id": "2a163ab_3",
+        "snippet": "All 3 show_transactions calls failed (409 'user does not exist'); agent still called complete_task(answer=None) with empty action set"
+      },
+      "candidate_fix_surfaces": ["orchestrator_guard", "executor_react_prompt"],
+      "seen_in_tasks": ["2a163ab_3", "afc0fce_1", "afc0fce_2"],
+      "count": 3,
+      "signature_notes": "Structural — detect by: complete_task called AND no successful action API (like_*, create_*, send_*, place_order, approve_*, deny_*, delete_*) in any step's output."
+    }
+  ]
+}

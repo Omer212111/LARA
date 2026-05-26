@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "last_updated": "2026-05-22",
+  "notes": "Pinned benchmark slices for LARA. A 'slice' is a named, reproducible set of task IDs + parameters. The autonomous loop references slices by name so that runs from different sessions are directly comparable; raw 'benchmark.py --app venmo --n 5' is not stable because the underlying keyword filter can drift. Update task_ids only when you deliberately want to expand or reshape a slice (record why in 'change_log').",
+  "slices": {
+    "venmo-smoke-5": {
+      "purpose": "Fast iteration on venmo + phone failures. First 5 of the 21 venmo-tagged train tasks; covers the 2a163ab (like-roommates social feed) and afc0fce (comment+like coworker payments) families that dominate today's failure analysis.",
+      "dataset": "train",
+      "task_ids": [
+        "2a163ab_1",
+        "2a163ab_2",
+        "2a163ab_3",
+        "afc0fce_1",
+        "afc0fce_2"
+      ],
+      "params": {
+        "max_iterations": 12,
+        "max_executor_runs": 2,
+        "temperature": 0.1,
+        "executor_model": "gpt-4.1-nano",
+        "explorer_model": "gpt-4.1-nano"
+      },
+      "expected_runtime_s_range": [60, 180],
+      "created_in_run": "ba1uv9gmu",
+      "change_log": [
+        {"date": "2026-05-22", "note": "Initial pin. Same 5 IDs used across runs ba1uv9gmu / bg22f2uo7 / bv1ew2sc3."}
+      ]
+    }
+  }
+}

@@ -1,0 +1,9 @@
+{"ts": "2026-05-22T06:28:23", "fix_id": "E-WRONG-ENTITY:0", "phase": "propose_patch", "model": "gpt-4.1-mini", "usage": {"prompt_tokens": 2042, "completion_tokens": 1799}, "cost_usd": 0.003695, "elapsed_s": 34.14}
+{"ts": "2026-05-22T06:32:54", "fix_id": "E-WRONG-ENTITY:0", "phase": "propose_patch", "model": "gpt-4.1-mini", "usage": {"prompt_tokens": 2042, "completion_tokens": 1818}, "cost_usd": 0.003726, "elapsed_s": 22.65}
+{"ts": "2026-05-22T06:34:14", "fix_id": "E-WRONG-ENTITY:0", "phase": "propose_patch", "model": "gpt-4.1-mini", "usage": {"prompt_tokens": 2042, "completion_tokens": 1798}, "cost_usd": 0.003694, "elapsed_s": 25.16}
+{"ts": "2026-05-24T21:29:06", "fix_id": "E-WRONG-ENTITY:0", "phase": "propose_patch", "model": "gpt-4.1-mini", "usage": {"prompt_tokens": 2042, "completion_tokens": 1794}, "cost_usd": 0.003687, "elapsed_s": 23.19}
+{"ts": "2026-05-24T21:31:11", "fix_id": "E-WRONG-ENTITY:0", "phase": "cycle_total", "elapsed_s": 148.4}
+{"ts": "2026-05-25T18:36:20", "fix_id": "E-WRONG-ENTITY:0", "phase": "propose_patch", "model": "gpt-4.1-mini", "usage": {"prompt_tokens": 2042, "completion_tokens": 1803}, "cost_usd": 0.003702, "elapsed_s": 64.83}
+{"ts": "2026-05-25T18:58:58", "fix_id": "E-WRONG-ENTITY:0", "phase": "propose_patch", "model": "gpt-4.1-mini", "usage": {"prompt_tokens": 2042, "completion_tokens": 1803}, "cost_usd": 0.003702, "elapsed_s": 44.46}
+{"ts": "2026-05-25T19:01:20", "fix_id": "E-WRONG-ENTITY:1", "phase": "propose_patch", "model": "gpt-4.1-mini", "usage": {"prompt_tokens": 2546, "completion_tokens": 2297}, "cost_usd": 0.004694, "elapsed_s": 35.86}
+{"ts": "2026-05-25T19:07:17", "fix_id": "E-ID-TYPE-MISMATCH:0", "phase": "propose_patch", "model": "gpt-4.1-mini", "usage": {"prompt_tokens": 2544, "completion_tokens": 2290}, "cost_usd": 0.004682, "elapsed_s": 159.8}
