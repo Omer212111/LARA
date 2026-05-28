@@ -1,6 +1,0 @@
-appworld
-requests
-urllib3
-jinja2
-langchain
-langchain-core
