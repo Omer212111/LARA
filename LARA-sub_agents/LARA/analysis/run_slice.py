@@ -85,7 +85,9 @@ def _tee_to(path: str | None):
     if path is None:
         yield
         return
-    log_file = open(path, "w", buffering=1)
+    # UTF-8 + errors="replace": the logger prints emojis (📋, 🚀, ✅); on Windows the
+    # default cp1252 encoding raises UnicodeEncodeError and kills the run mid-task.
+    log_file = open(path, "w", buffering=1, encoding="utf-8", errors="replace")
     real_stdout, real_stderr = sys.stdout, sys.stderr
     sys.stdout = _Tee(real_stdout, log_file)
     sys.stderr = _Tee(real_stderr, log_file)

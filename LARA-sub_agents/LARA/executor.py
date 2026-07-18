@@ -12,11 +12,14 @@ REACT_EXECUTOR_SYSTEM when no specialist matches (e.g. multi-app glue steps).
 
 from app_agents import (
     AmazonExecutor,
+    ApiDocsExecutor,
     AppOrchestrator,
     FileSystemExecutor,
     GmailExecutor,
     PhoneExecutor,
+    SplitwiseExecutor,
     SpotifyExecutor,
+    TodoistExecutor,
     VenmoExecutor,
 )
 
@@ -28,6 +31,9 @@ _orchestrator = AppOrchestrator(
         "file_system": FileSystemExecutor(),
         "venmo":       VenmoExecutor(),
         "phone":       PhoneExecutor(),
+        "splitwise":   SplitwiseExecutor(),
+        "todoist":     TodoistExecutor(),
+        "api_docs":    ApiDocsExecutor(),
     }
 )
 

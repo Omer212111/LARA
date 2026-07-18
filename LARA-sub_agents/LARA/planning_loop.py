@@ -18,7 +18,7 @@ from langchain_core.messages import HumanMessage
 from langgraph.graph import END, StateGraph
 
 import logger
-from config import MAX_ITERATIONS
+from config import MAX_EXECUTOR_RUNS, MAX_ITERATIONS
 from explorer import explorer_node
 from executor import executor_node
 from reviewer import reviewer_node
@@ -26,13 +26,36 @@ from state import AgentState
 from supervisor import supervisor_node
 
 
-def _after_executor(_state: AgentState) -> str:
+def _after_executor(state: AgentState) -> str:
     """
-    Routing function called after every Executor run. Always returns Supervisor.
+    Routing function called after every Executor run.
 
-    Reviewer is disabled (19/05 benchmark: fired on 15/17 wrong tasks, improved 0).
-    Re-enable by restoring the wrong-answer branch that routes to "Reviewer".
+    Normal path → Supervisor. Exception: if complete_task() was called but the answer
+    was WRONG (a wrong value, not a crash), the Reviewer hasn't run yet for this task,
+    there is still an Executor attempt left, AND iteration budget remains for the retry
+    to actually finish → route to the Reviewer for a structured diagnosis the Executor
+    consumes on its next attempt.
+
+    Bounded re-enable (was disabled after the 19/05 benchmark showed 0 improvement). That
+    result is explained by MAX_ITERATIONS=3 leaving no room for the corrected attempt and
+    gpt-4.1-nano being too weak to act on the diagnosis — both now fixed (limits ↑, model
+    → gpt-4.1-mini). The guards below cap the blast radius: Reviewer fires at most once,
+    only on a wrong (not crashed) answer, and only when a retry can complete.
+
+    The Reviewer→Executor edge BYPASSES the Supervisor, so the MAX_EXECUTOR_RUNS /
+    MAX_ITERATIONS guards MUST live here — otherwise the limits never fire on this path.
     """
+    eval_failure   = state.get("last_eval_failure", "")
+    had_code_error = bool(state.get("last_error", ""))
+    reviewer_ran   = state.get("reviewer_ran", False)
+    executor_runs  = state.get("executor_runs", 0)
+    iterations     = state.get("iterations", 0)
+
+    wrong_answer = bool(eval_failure) and not had_code_error
+    if (wrong_answer and not reviewer_ran
+            and executor_runs < MAX_EXECUTOR_RUNS
+            and iterations < MAX_ITERATIONS - 1):
+        return "Reviewer"
     return "Supervisor"
 
 

@@ -1,8 +1,32 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-05-22",
-  "notes": "Pinned benchmark slices for LARA. A 'slice' is a named, reproducible set of task IDs + parameters. The autonomous loop references slices by name so that runs from different sessions are directly comparable; raw 'benchmark.py --app venmo --n 5' is not stable because the underlying keyword filter can drift. Update task_ids only when you deliberately want to expand or reshape a slice (record why in 'change_log').",
+  "last_updated": "2026-07-18",
+  "notes": "Pinned benchmark slices for LARA. A 'slice' is a named, reproducible set of task IDs + parameters. The autonomous loop references slices by name so that runs from different sessions are directly comparable; raw 'benchmark.py --app venmo --n 5' is not stable because the underlying keyword filter can drift. Update task_ids only when you deliberately want to expand or reshape a slice (record why in 'change_log'). NOTE: the per-app slices below (splitwise-8, todoist-8) ship with empty task_ids because the AppWorld task payloads (data/tasks/*/specs.json) are not installed in every environment. Populate them once, from the LARA dir with the appworld data present, via:  python -c \"from benchmark import find_tasks_by_app; print(find_tasks_by_app('splitwise'))\"  and paste the first N IDs.",
   "slices": {
+    "broad-20": {
+      "purpose": "Primary north-star A/B slice. The first 20 train tasks (identical to `benchmark.py --n 20 --dataset train`) — a mixed, positionally-stable sample across apps. Use this to track progress toward the 50% goal (~10/20 correct). Larger than the 5-task smoke slice so model/prompt A/Bs are less positionally noisy.",
+      "dataset": "train",
+      "task_ids": [
+        "82e2fac_1", "82e2fac_2", "82e2fac_3",
+        "692c77d_1", "692c77d_2", "692c77d_3",
+        "2a163ab_1", "2a163ab_2", "2a163ab_3",
+        "6104387_1", "6104387_2", "6104387_3",
+        "29caf6f_1", "29caf6f_2", "29caf6f_3",
+        "afc0fce_1", "afc0fce_2", "afc0fce_3",
+        "287e338_1", "287e338_2"
+      ],
+      "params": {
+        "max_iterations": 6,
+        "max_executor_runs": 2,
+        "temperature": 0.1,
+        "executor_model": "gpt-4.1-mini",
+        "explorer_model": "gpt-4.1-mini"
+      },
+      "expected_runtime_s_range": [600, 1800],
+      "change_log": [
+        {"date": "2026-07-18", "note": "Initial pin. First 20 train IDs — same set as the benchmark.py default, so parsed panel is directly comparable to the official scorer."}
+      ]
+    },
     "venmo-smoke-5": {
       "purpose": "Fast iteration on venmo + phone failures. First 5 of the 21 venmo-tagged train tasks; covers the 2a163ab (like-roommates social feed) and afc0fce (comment+like coworker payments) families that dominate today's failure analysis.",
       "dataset": "train",
@@ -14,16 +38,47 @@
         "afc0fce_2"
       ],
       "params": {
-        "max_iterations": 12,
+        "max_iterations": 6,
         "max_executor_runs": 2,
         "temperature": 0.1,
-        "executor_model": "gpt-4.1-nano",
-        "explorer_model": "gpt-4.1-nano"
+        "executor_model": "gpt-4.1-mini",
+        "explorer_model": "gpt-4.1-mini"
       },
       "expected_runtime_s_range": [60, 180],
       "created_in_run": "ba1uv9gmu",
       "change_log": [
-        {"date": "2026-05-22", "note": "Initial pin. Same 5 IDs used across runs ba1uv9gmu / bg22f2uo7 / bv1ew2sc3."}
+        {"date": "2026-05-22", "note": "Initial pin. Same 5 IDs used across runs ba1uv9gmu / bg22f2uo7 / bv1ew2sc3."},
+        {"date": "2026-07-18", "note": "params updated to gpt-4.1-mini + max_iterations=6 to match the new config.py defaults (params are documentation-only; the runtime reads config.py)."}
+      ]
+    },
+    "splitwise-8": {
+      "purpose": "Per-app regression slice for the new Splitwise specialist. Populate with the first 8 splitwise-tagged train tasks.",
+      "dataset": "train",
+      "task_ids": [],
+      "params": {
+        "max_iterations": 6,
+        "max_executor_runs": 2,
+        "temperature": 0.1,
+        "executor_model": "gpt-4.1-mini",
+        "explorer_model": "gpt-4.1-mini"
+      },
+      "change_log": [
+        {"date": "2026-07-18", "note": "Scaffolded empty. Populate via find_tasks_by_app('splitwise') once the AppWorld task data is installed (see top-level notes)."}
+      ]
+    },
+    "todoist-8": {
+      "purpose": "Per-app regression slice for the new Todoist specialist. Populate with the first 8 todoist-tagged train tasks.",
+      "dataset": "train",
+      "task_ids": [],
+      "params": {
+        "max_iterations": 6,
+        "max_executor_runs": 2,
+        "temperature": 0.1,
+        "executor_model": "gpt-4.1-mini",
+        "explorer_model": "gpt-4.1-mini"
+      },
+      "change_log": [
+        {"date": "2026-07-18", "note": "Scaffolded empty. Populate via find_tasks_by_app('todoist') once the AppWorld task data is installed (see top-level notes)."}
       ]
     }
   }

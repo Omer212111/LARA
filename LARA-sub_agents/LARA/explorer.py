@@ -130,6 +130,10 @@ _APP_KEYWORDS = {
                    "friend", "sibling", "text message", "sms", "phone number"],
     "file_system":["file", "folder", "directory", "download", "document", "upload",
                    "path", "filesystem", "file system", "read file", "write file"],
+    # Conservative — api_docs tasks are rare. Avoid the bare word "api" (it appears in
+    # unrelated task text) and require doc/count-of-apis phrasing.
+    "api_docs":   ["api docs", "api documentation", "how many apis", "which apis",
+                   "available apis", "list of apis", "api that"],
 }
 
 

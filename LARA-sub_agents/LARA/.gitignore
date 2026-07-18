@@ -19,3 +19,11 @@ trace_output.json
 *.rar
 *.txt
 dashboard.html
+
+# AppWorld task data — large; restored from git history / downloaded locally, never commit.
+# (data/tasks here is a junction to <repo-root>/data/tasks.)
+data/tasks/
+*_run.log
+*.report.json
+# AppWorld base template DBs (135MB) — restored from git history, never commit
+data/base_dbs/

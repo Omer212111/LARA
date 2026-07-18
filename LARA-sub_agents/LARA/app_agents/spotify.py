@@ -11,6 +11,7 @@ from .base import BaseAppExecutor
 class SpotifyExecutor(BaseAppExecutor):
     app_name = "spotify"
     app_system_prompt = """\
+=== SURFACE: spotify_specialist:prompt === BEGIN
 === READY-TO-USE CODE TEMPLATES (use verbatim — do not explore APIs first) ===
 
 TASK: "rate/give N-star rating to liked songs in my playlists"
@@ -78,4 +79,5 @@ SONG RATING (if template above doesn't fit):
           call_api('spotify', 'update_song_review', token, review_id=my_review['song_review_id'], rating=N)
       else:
           call_api('spotify', 'review_song', token, song_id=sid, rating=N)
+=== SURFACE: spotify_specialist:prompt === END
 """

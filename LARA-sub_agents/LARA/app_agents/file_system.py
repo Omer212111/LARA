@@ -13,6 +13,7 @@ from .base import BaseAppExecutor
 class FileSystemExecutor(BaseAppExecutor):
     app_name = "file_system"
     app_system_prompt = """\
+=== SURFACE: file_system_specialist:prompt === BEGIN
 ╔═══════════════════════════════════════════════════════════════════════════╗
 ║ FILE_SYSTEM — show_directory returns a LIST OF PATH STRINGS, not dicts.    ║
 ║ It is RECURSIVE by default. create_file does NOT overwrite by default.     ║
@@ -135,4 +136,5 @@ class FileSystemExecutor(BaseAppExecutor):
   • Creating / writing / deleting / moving / copying / compressing are ACTION
     tasks → finish with apis.supervisor.complete_task(answer=None).
     Counting / reading / "what is the content" are VALUE tasks → answer the value.
+=== SURFACE: file_system_specialist:prompt === END
 """

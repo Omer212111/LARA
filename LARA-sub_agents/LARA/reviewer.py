@@ -15,7 +15,7 @@ import os
 from openai import OpenAI
 
 import logger
-from config import EXPLORER_MODEL
+from config import REVIEWER_MODEL
 from state import AgentState
 
 
@@ -129,7 +129,7 @@ FIX_INSTRUCTION: <concrete instruction for the Executor — name the exact loop,
 
     client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
     response = client.chat.completions.create(
-        model=EXPLORER_MODEL,
+        model=REVIEWER_MODEL,
         messages=[{"role": "user", "content": prompt}],
         temperature=0.1,
         max_tokens=600,

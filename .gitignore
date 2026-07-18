@@ -1,0 +1,19 @@
+# AppWorld task data + base template DBs — large; restored from git history / downloaded
+# locally for running benchmarks. Never commit.
+data/tasks/
+data/base_dbs/
+
+# Secrets
+.env
+
+# Environments / caches / IDE
+venv/
+venv_linux/
+__pycache__/
+.idea/
+.vscode/
+
+# Local run artifacts
+*.out
+run_log.html
+benchmark_log.txt

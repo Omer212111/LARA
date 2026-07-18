@@ -5,6 +5,9 @@ from .amazon import AmazonExecutor
 from .file_system import FileSystemExecutor
 from .venmo import VenmoExecutor
 from .phone import PhoneExecutor
+from .splitwise import SplitwiseExecutor
+from .todoist import TodoistExecutor
+from .api_docs import ApiDocsExecutor
 
 __all__ = [
     "BaseAppExecutor",
@@ -15,4 +18,7 @@ __all__ = [
     "FileSystemExecutor",
     "VenmoExecutor",
     "PhoneExecutor",
+    "SplitwiseExecutor",
+    "TodoistExecutor",
+    "ApiDocsExecutor",
 ]

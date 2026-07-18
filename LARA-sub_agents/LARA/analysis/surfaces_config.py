@@ -60,6 +60,57 @@ SURFACES: dict[str, Surface] = {
             "sandbox clock, text/voice messages, alarms."
         ),
     ),
+    "spotify_specialist": Surface(
+        surface_key="spotify_specialist",
+        file_path=LARA_ROOT / "app_agents" / "spotify.py",
+        marker_label="spotify_specialist:prompt",
+        description="Spotify specialist prompt. Liked/playlist intersection, ratings, like/play counts.",
+    ),
+    "gmail_specialist": Surface(
+        surface_key="gmail_specialist",
+        file_path=LARA_ROOT / "app_agents" / "gmail.py",
+        marker_label="gmail_specialist:prompt",
+        description="Gmail specialist prompt. Thread-based model, send vs draft vs reply, labels, counting.",
+    ),
+    "amazon_specialist": Surface(
+        surface_key="amazon_specialist",
+        file_path=LARA_ROOT / "app_agents" / "amazon.py",
+        marker_label="amazon_specialist:prompt",
+        description="Amazon specialist prompt. Cart/wishlist order patterns, seller rating, payment-card retry.",
+    ),
+    "file_system_specialist": Surface(
+        surface_key="file_system_specialist",
+        file_path=LARA_ROOT / "app_agents" / "file_system.py",
+        marker_label="file_system_specialist:prompt",
+        description="File_system specialist prompt. show_directory returns path strings, create vs update, moves.",
+    ),
+    "splitwise_specialist": Surface(
+        surface_key="splitwise_specialist",
+        file_path=LARA_ROOT / "app_agents" / "splitwise.py",
+        marker_label="splitwise_specialist:prompt",
+        description="Splitwise specialist prompt. Balance APIs, settle_up (ledger only), record_expense splits.",
+    ),
+    "todoist_specialist": Surface(
+        surface_key="todoist_specialist",
+        file_path=LARA_ROOT / "app_agents" / "todoist.py",
+        marker_label="todoist_specialist:prompt",
+        description="Todoist specialist prompt. title vs name, string priority enum, show_tasks nested dict.",
+    ),
+    "api_docs_specialist": Surface(
+        surface_key="api_docs_specialist",
+        file_path=LARA_ROOT / "app_agents" / "api_docs.py",
+        marker_label="api_docs_specialist:prompt",
+        description="API docs meta-app specialist prompt. No login/token, direct apis.api_docs.* calls, counting.",
+    ),
+    "executor_react_prompt": Surface(
+        surface_key="executor_react_prompt",
+        file_path=LARA_ROOT / "prompts.py",
+        marker_label="executor_react_prompt:body",
+        description=(
+            "The generic ReAct executor system prompt used for multi-app glue steps. "
+            "Helper usage, one-step discipline, ACTION-vs-VALUE, fail-closed rules."
+        ),
+    ),
 }
 
 

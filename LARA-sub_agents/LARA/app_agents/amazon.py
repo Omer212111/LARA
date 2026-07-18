@@ -11,6 +11,7 @@ from .base import BaseAppExecutor
 class AmazonExecutor(BaseAppExecutor):
     app_name = "amazon"
     app_system_prompt = """\
+=== SURFACE: amazon_specialist:prompt === BEGIN
 ╔═══════════════════════════════════════════════════════════════════════════╗
 ║ AMAZON TASK PATTERNS — READ FIRST. These OVERRIDE the Explorer plan.        ║
 ║ The plan is often wrong (catalog searches, hardcoded IDs, irrelevant apps). ║
@@ -202,4 +203,5 @@ PRICE / RATING DISAMBIGUATION:
   "cheapest"          → sort by price ascending      [field: 'price']
   "highest rated"     → sort by rating descending    [field: 'rating']
   "most reviewed"     → sort by num_product_reviews  [field: 'num_product_reviews']
+=== SURFACE: amazon_specialist:prompt === END
 """

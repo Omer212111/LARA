@@ -11,6 +11,7 @@ from .base import BaseAppExecutor
 class GmailExecutor(BaseAppExecutor):
     app_name = "gmail"
     app_system_prompt = """\
+=== SURFACE: gmail_specialist:prompt === BEGIN
 ╔═══════════════════════════════════════════════════════════════════════════╗
 ║ GMAIL IS THREAD-BASED. Listing APIs return THREADS, not individual emails. ║
 ║ A thread holds one or more emails. To read email bodies you must open the  ║
@@ -134,4 +135,5 @@ class GmailExecutor(BaseAppExecutor):
     apis.supervisor.complete_task(answer=None). NEVER answer with an id or 'done'.
   • If the task needs info from another app (a file to attach, a song title), fetch
     that FIRST, build the body string, then send in a later step.
+=== SURFACE: gmail_specialist:prompt === END
 """
