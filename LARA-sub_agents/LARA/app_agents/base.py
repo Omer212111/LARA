@@ -30,7 +30,7 @@ from config import (
     OLLAMA_TIMEOUT,
 )
 from executor_helpers import BOOTSTRAP_CODE
-from prompts import REACT_EXECUTOR_SYSTEM, build_react_initial_message
+from prompts_executor import REACT_EXECUTOR_SYSTEM, build_react_initial_message
 from state import AgentState
 from tools import evaluate_task, execute_python_code
 

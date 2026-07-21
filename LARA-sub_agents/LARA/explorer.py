@@ -17,7 +17,7 @@ from langchain_core.messages import AIMessage
 
 import logger
 from config import EXPLORER_MODEL
-from prompts import EXPLORER_TOOLS_OPENAI, build_explorer_system
+from prompts_explorer import EXPLORER_TOOLS_OPENAI, build_explorer_system
 from state import AgentState
 
 

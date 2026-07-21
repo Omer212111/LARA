@@ -66,3 +66,58 @@ All runtime constants live in [config.py](config.py): `MAX_ITERATIONS`, `MAX_EXE
 Dependency versions are pinned and fragile — appworld/sqlmodel need **pydantic <2**, and langgraph/langchain-core must stay in sync. **Never `pip install langgraph --upgrade`** (pulls langchain-core 1.x and breaks everything).
 
 [logger.py](logger.py) writes `run_log.html` (auto-refreshes every 2s) — open it to watch a live run.
+
+## Prompt surfaces — two files, two owners
+
+The former single `prompts.py` was split so the Explorer and Executor prompt
+surfaces stop colliding in merges. Nothing is shared between them:
+
+| file | surfaces | consumed by |
+|---|---|---|
+| [prompts_explorer.py](prompts_explorer.py) | `build_explorer_system`, `EXPLORER_TOOLS_OPENAI` | [explorer.py](explorer.py) |
+| [prompts_executor.py](prompts_executor.py) | `REACT_EXECUTOR_SYSTEM`, `build_react_initial_message` | [app_agents/base.py](app_agents/base.py) |
+
+Each file has exactly one importer. Edit the one belonging to the agent you are
+changing; never reintroduce a shared `prompts.py`.
+
+(The legacy `EXECUTOR_SYSTEM_TEMPLATE` — a pre-ReAct single-shot prompt with no
+remaining importers — was dropped in the split.)
+
+## Working in parallel: file ownership
+
+Two tracks divide the codebase along its natural seam. They are nearly disjoint;
+the rules below keep them that way.
+
+**Track A — pipeline & orchestration**
+`app_agents/base.py` (orchestrator, dispatch loop, guards) · `tools.py` ·
+`planning_loop.py` · `reviewer.py` · `state.py` · `config.py` ·
+`prompts_executor.py`
+
+**Track B — knowledge, specialists & measurement**
+`app_agents/<app>.py` (one file per specialist, no coupling between them) ·
+`explorer.py` · `prompts_explorer.py` · `analysis/*`
+
+### The frozen contract
+
+`BaseAppExecutor` in [app_agents/base.py](app_agents/base.py) is the interface
+every specialist inherits:
+
+```python
+class BaseAppExecutor:
+    app_name: str = ""            # lowercase app key, e.g. "spotify"
+    app_system_prompt: str = ""   # appended after REACT_EXECUTOR_SYSTEM
+    def build_system_prompt(self) -> str: ...
+```
+
+**Do not change this class without agreeing with the other track first.** While it
+holds, Track B never needs to open `base.py` — specialists are pure subclass
+files, and Track A can rewrite the orchestrator freely.
+
+### Sequencing constraint
+
+The Reviewer retry path currently discards most of its own work (see
+[analysis/CAPABILITY_STUDY_2026-07-20.md](analysis/CAPABILITY_STUDY_2026-07-20.md)):
+58 fires, 1 rescue over 105 tasks, and 12 of 16 failures above difficulty 1.
+Until that is fixed, **benchmark numbers understate real capability and cannot
+distinguish an improvement from noise**. Fix it and re-baseline before either
+track measures anything.
