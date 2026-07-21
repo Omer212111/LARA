@@ -1,0 +1,419 @@
+{
+  "slice": "todoist-random15",
+  "generated_at": "2026-07-20T18:54:14",
+  "log": "analysis/runs/todoist-random15.log",
+  "aggregate": {
+    "reviewer": {
+      "fired": 12,
+      "rescued": 0,
+      "retry_killed": 12,
+      "root_causes": {
+        "WRONG ENTITY": 3,
+        "ENVIRONMENT_ERROR": 2,
+        "WRONG FILTER": 2,
+        "WRONG SCOPE": 2,
+        "WRONG FORMAT": 1,
+        "WRONG DATA SOURCE": 1,
+        "WRONG FIELD": 1
+      }
+    },
+    "premature_strips": 5,
+    "n_tasks": 15,
+    "n_correct": 3,
+    "success_rate": 0.2,
+    "by_difficulty": {
+      "3": {
+        "n": 15,
+        "correct": 3,
+        "rate": 0.2
+      }
+    },
+    "by_app_count": {
+      "2-app": {
+        "n": 5,
+        "correct": 0,
+        "rate": 0.0
+      },
+      "1-app": {
+        "n": 3,
+        "correct": 1,
+        "rate": 0.333
+      },
+      "6-app": {
+        "n": 2,
+        "correct": 0,
+        "rate": 0.0
+      },
+      "3-app": {
+        "n": 5,
+        "correct": 2,
+        "rate": 0.4
+      }
+    },
+    "failure_types": {
+      "retry_killed_stale_eval": 9,
+      "code_error": 3
+    },
+    "mean_seconds": 66.1
+  },
+  "records": [
+    {
+      "task_id": "4441ee9_1",
+      "verdict": "WRONG",
+      "correct": false,
+      "tests_passed": 8,
+      "tests_total": 11,
+      "seconds": 74.5,
+      "difficulty": 3,
+      "required_apps": [
+        "gmail",
+        "todoist"
+      ],
+      "instruction": "My manager assigns me tasks at the beginning of every week with a subject starting with \"TODO\". At the end of each week, I reply to them \"Done.\" or \"Not Done.\". For this week, I have starred the emails/tasks which I finished working on, and left the others unstarred. I am closing off this week now, please reply accordingly, and unstar those threads. I may have non-todo emails starred, please keep them as is.",
+      "failure_type": "retry_killed_stale_eval",
+      "failed_asserts": [
+        "set updated_user_email_threads to be ones that belong to main_user (gmail user id),\\nassert all of the updated user_email_threads IDs are in\\nprivate_data.done_user_email_thread_ids + private_data.not_done_user_email_thread_ids.",
+        "obtain added gmail.Email records using models.changed_records,\\nand assert their .response_to_email_id match exactly to\\nprivate_data.done_email_ids + private_data.not_done_email_ids (ignoring order).",
+        "assert all added emails with .response_to_email_id in private_data.done_email_ids\\nhave body=data.public.done_string (normalize_text=True)"
+      ],
+      "reviewer_fired": true,
+      "reviewer_root_cause": "WRONG FORMAT",
+      "retry_noop": true,
+      "premature_strips": 2
+    },
+    {
+      "task_id": "4441ee9_2",
+      "verdict": "WRONG",
+      "correct": false,
+      "tests_passed": 8,
+      "tests_total": 11,
+      "seconds": 56.5,
+      "difficulty": 3,
+      "required_apps": [
+        "gmail",
+        "todoist"
+      ],
+      "instruction": "My manager assigns me tasks at the beginning of every week with a subject starting with \"To Do\". At the end of each week, I reply to them \"Completed.\" or \"Not Completed.\". For this week, I have starred the emails/tasks which I finished working on, and left the others unstarred. I am closing off this week now, please reply accordingly, and unstar those threads. I may have non-todo emails starred, please keep them as is.",
+      "failure_type": "retry_killed_stale_eval",
+      "failed_asserts": [
+        "assert all gmail.UserEmailThread records in the end state with ids in\\nprivate_data.done_user_email_thread_ids are not starred.",
+        "obtain added gmail.Email records using models.changed_records,\\nand assert their .response_to_email_id match exactly to\\nprivate_data.done_email_ids + private_data.not_done_email_ids (ignoring order).",
+        "assert all added emails with .response_to_email_id in private_data.done_email_ids\\nhave body=data.public.done_string (normalize_text=True)"
+      ],
+      "reviewer_fired": true,
+      "reviewer_root_cause": "ENVIRONMENT_ERROR",
+      "retry_noop": true,
+      "premature_strips": 1
+    },
+    {
+      "task_id": "8ce6779_1",
+      "verdict": "WRONG",
+      "correct": false,
+      "tests_passed": 5,
+      "tests_total": 9,
+      "seconds": 60.9,
+      "difficulty": 3,
+      "required_apps": [
+        "todoist"
+      ],
+      "instruction": "At my job, we manage the tasks on todoist. But I am changing job soon, so for each task that is assigned to me and is incomplete yet, I have asked who can take it from me. See the discussion in comments and reassign based on it. Then, leave a comment there, \"Thank you <person_first_name>!\". Here <person_first_name> is the first name of the person who is reassigned the task. If no one has agreed to take the task, leave it as is.",
+      "failure_type": "code_error",
+      "failed_asserts": [
+        "assert the keys of the updated_tasks match the set of task_ids in private_data.task_id_to_assignee_id.",
+        "assert the task_id_to_assignee_id obtained from the updated_tasks matches the\\nprivate_data.task_id_to_assignee_id.",
+        "assert the set of added task comment task_ids matches the\\nset of keys of private_data.task_id_to_comment_text."
+      ],
+      "reviewer_fired": true,
+      "reviewer_root_cause": "WRONG DATA SOURCE",
+      "retry_noop": true,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "8ce6779_2",
+      "verdict": "WRONG",
+      "correct": false,
+      "tests_passed": 5,
+      "tests_total": 9,
+      "seconds": 56.7,
+      "difficulty": 3,
+      "required_apps": [
+        "todoist"
+      ],
+      "instruction": "At my job, we manage the tasks on todoist. But I am changing job soon, so for each task that is assigned to me and is incomplete yet, I have asked who can take it from me. See the discussion in comments and reassign based on it. Then, leave a comment there, \"Thanks <person_first_name>!\". Here <person_first_name> is the first name of the person who is reassigned the task. If no one has agreed to take the task, leave it as is.",
+      "failure_type": "code_error",
+      "failed_asserts": [
+        "assert the keys of the updated_tasks match the set of task_ids in private_data.task_id_to_assignee_id.",
+        "assert the task_id_to_assignee_id obtained from the updated_tasks matches the\\nprivate_data.task_id_to_assignee_id.",
+        "assert the set of added task comment task_ids matches the\\nset of keys of private_data.task_id_to_comment_text."
+      ],
+      "reviewer_fired": true,
+      "reviewer_root_cause": "ENVIRONMENT_ERROR",
+      "retry_noop": true,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "8ce6779_3",
+      "verdict": "CORRECT",
+      "correct": true,
+      "tests_passed": 9,
+      "tests_total": 9,
+      "seconds": 47.2,
+      "difficulty": 3,
+      "required_apps": [
+        "todoist"
+      ],
+      "instruction": "At my job, we manage the tasks on todoist. But I am changing job soon, so for each task that is assigned to me and is incomplete yet, I have asked who can take it from me. See the discussion in comments and reassign based on it. Then, leave a comment there, \"Greatly appreciate it <person_first_name>!\". Here <person_first_name> is the first name of the person who is reassigned the task. If no one has agreed to take the task, leave it as is.",
+      "failure_type": null,
+      "failed_asserts": [],
+      "reviewer_fired": false,
+      "reviewer_root_cause": null,
+      "retry_noop": false,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "986aa4e_1",
+      "verdict": "WRONG",
+      "correct": false,
+      "tests_passed": 6,
+      "tests_total": 10,
+      "seconds": 105.1,
+      "difficulty": 3,
+      "required_apps": [
+        "spotify",
+        "todoist"
+      ],
+      "instruction": "I am going on a trip to Beijing with some of my roommates. We are managing its planning on a Todoist project for it. One of the tasks in it is about preparing a Spotify playlist. I have made the playlist and shared it with others on the project. But they have made some suggestions in comments. Please incorporate them, leave a final comment, \"Incorporated changes.\", and mark it complete.",
+      "failure_type": "retry_killed_stale_eval",
+      "failed_asserts": [
+        "assert model changes match spotify.PlaylistSong, todoist.Task, todoist.TaskComment",
+        "obtain added, removed spotify.PlaylistSong records using models.changed_records,\\nand assert the added playlist_songs have playlist_id private_data.selected_playlist_id.",
+        "assert all added playlist_songs' song_ids match\\nprivate_data.suggested_add_song_ids (ignoring order)."
+      ],
+      "reviewer_fired": true,
+      "reviewer_root_cause": "WRONG FILTER",
+      "retry_noop": true,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "986aa4e_2",
+      "verdict": "WRONG",
+      "correct": false,
+      "tests_passed": 5,
+      "tests_total": 10,
+      "seconds": 57.4,
+      "difficulty": 3,
+      "required_apps": [
+        "spotify",
+        "todoist"
+      ],
+      "instruction": "I am going on a trip to Edinburgh with some of my siblings. We are managing its planning on a Todoist project for it. One of the tasks in it is about preparing a Spotify playlist. I have made the playlist and shared it with others on the project. But they have made some suggestions in comments. Please incorporate them, leave a final comment, \"Done!\", and mark it complete.",
+      "failure_type": "code_error",
+      "failed_asserts": [
+        "assert model changes match spotify.PlaylistSong, todoist.Task, todoist.TaskComment",
+        "obtain added, removed spotify.PlaylistSong records using models.changed_records,\\nand assert the added playlist_songs have playlist_id private_data.selected_playlist_id.",
+        "assert all added playlist_songs' song_ids match\\nprivate_data.suggested_add_song_ids (ignoring order)."
+      ],
+      "reviewer_fired": true,
+      "reviewer_root_cause": "WRONG FIELD",
+      "retry_noop": true,
+      "premature_strips": 1
+    },
+    {
+      "task_id": "986aa4e_3",
+      "verdict": "WRONG",
+      "correct": false,
+      "tests_passed": 5,
+      "tests_total": 10,
+      "seconds": 87.9,
+      "difficulty": 3,
+      "required_apps": [
+        "spotify",
+        "todoist"
+      ],
+      "instruction": "I am going on a trip to Bangkok with some of my friends. We are managing its planning on a Todoist project for it. One of the tasks in it is about preparing a Spotify playlist. I have made the playlist and shared it with others on the project. But they have made some suggestions in comments. Please incorporate them, leave a final comment, \"Thanks! Updated.\", and mark it complete.",
+      "failure_type": "retry_killed_stale_eval",
+      "failed_asserts": [
+        "obtain added, removed spotify.PlaylistSong records using models.changed_records,\\nand assert the added playlist_songs have playlist_id private_data.selected_playlist_id.",
+        "assert all added playlist_songs' song_ids match\\nprivate_data.suggested_add_song_ids (ignoring order).",
+        "assert all the removed playlist_songs' song_ids match\\nthe private_data.suggested_delete_song_ids."
+      ],
+      "reviewer_fired": true,
+      "reviewer_root_cause": "WRONG SCOPE",
+      "retry_noop": true,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "988af8e_1",
+      "verdict": "WRONG",
+      "correct": false,
+      "tests_passed": 9,
+      "tests_total": 24,
+      "seconds": 55.8,
+      "difficulty": 3,
+      "required_apps": [
+        "amazon",
+        "file_system",
+        "gmail",
+        "splitwise",
+        "todoist",
+        "venmo"
+      ],
+      "instruction": "I am going on a camping trip with some of my friends. I have created a new Todoist project for managing its tasks. Please do them for me, and mark them all complete.",
+      "failure_type": "retry_killed_stale_eval",
+      "failed_asserts": [
+        "assert model changes match todoist.Task, amazon.Order,\\nsplitwise.Group, splitwise.Expense, venmo.PaymentRequest\\ngmail.GlobalEmailThread, gmail.UserEmailThread, gmail.Email, gmail.Attachment,\\nignoring todoist.SubTask, file_system.Directory, amazon.CartEntry, amazon.Address, file_system.File",
+        "obtain added amazon.Order records using models.changed_records, and assert 1 is added.",
+        "assert the product type to quantity mapping from this order private_data.product_type_to_quantity."
+      ],
+      "reviewer_fired": true,
+      "reviewer_root_cause": "WRONG ENTITY",
+      "retry_noop": true,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "988af8e_3",
+      "verdict": "WRONG",
+      "correct": false,
+      "tests_passed": 9,
+      "tests_total": 24,
+      "seconds": 35.0,
+      "difficulty": 3,
+      "required_apps": [
+        "amazon",
+        "file_system",
+        "gmail",
+        "splitwise",
+        "todoist",
+        "venmo"
+      ],
+      "instruction": "I am going on a camping trip with some of my friends. I have created a new Todoist project for managing its tasks. Please do them for me, and mark them all complete.",
+      "failure_type": "retry_killed_stale_eval",
+      "failed_asserts": [
+        "assert model changes match todoist.Task, amazon.Order,\\nsplitwise.Group, splitwise.Expense, venmo.PaymentRequest\\ngmail.GlobalEmailThread, gmail.UserEmailThread, gmail.Email, gmail.Attachment,\\nignoring todoist.SubTask, file_system.Directory, amazon.CartEntry, amazon.Address, file_system.File",
+        "obtain added amazon.Order records using models.changed_records, and assert 1 is added.",
+        "assert the product type to quantity mapping from this order private_data.product_type_to_quantity."
+      ],
+      "reviewer_fired": true,
+      "reviewer_root_cause": "WRONG FILTER",
+      "retry_noop": true,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "bde252e_1",
+      "verdict": "WRONG",
+      "correct": false,
+      "tests_passed": 4,
+      "tests_total": 9,
+      "seconds": 72.6,
+      "difficulty": 3,
+      "required_apps": [
+        "gmail",
+        "simple_note",
+        "todoist"
+      ],
+      "instruction": "I maintain my work schedule in SimpleNote and track my tasks in Todoist. Every night, I delete the completed tasks from my \"Today's Goal\" project. Then, I move the maximum number of incomplete tasks from my Inbox to the \"Today's Goal\" project. The maximum here is assuming I work back-to-back as per my schedule and I find time for the left overs from the current day first. I am busy tonight, please do it for me. Note that the moved tasks must be identical to the original ones.",
+      "failure_type": "retry_killed_stale_eval",
+      "failed_asserts": [
+        "assert the removed tasks' IDs match\\nprivate_data.to_delete_inbox_task_ids + private_data.to_delete_goal_task_ids.",
+        "assert the added tasks' project_id matches private_data.goal_project_id.",
+        "assert the task_title_to_descriptions obtained from the added tasks match\\nprivate_data.to_delete_task_title_to_descriptions (normalize_text)."
+      ],
+      "reviewer_fired": true,
+      "reviewer_root_cause": "WRONG ENTITY",
+      "retry_noop": true,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "bde252e_3",
+      "verdict": "WRONG",
+      "correct": false,
+      "tests_passed": 5,
+      "tests_total": 9,
+      "seconds": 104.2,
+      "difficulty": 3,
+      "required_apps": [
+        "gmail",
+        "simple_note",
+        "todoist"
+      ],
+      "instruction": "I maintain my work schedule in SimpleNote and track my tasks in Todoist. Every night, I delete the completed tasks from my \"Today\" project. Then, I move the maximum number of incomplete tasks from my Inbox to the \"Today\" project. The maximum here is assuming I work back-to-back as per my schedule and I find time for the left overs from the current day first. I am busy tonight, please do it for me. Note that the moved tasks must be identical to the original ones.",
+      "failure_type": "retry_killed_stale_eval",
+      "failed_asserts": [
+        "assert the removed tasks' IDs match\\nprivate_data.to_delete_inbox_task_ids + private_data.to_delete_goal_task_ids.",
+        "assert the task_title_to_descriptions obtained from the added tasks match\\nprivate_data.to_delete_task_title_to_descriptions (normalize_text).",
+        "assert the task_title_to_minutes obtained from the added tasks match\\nprivate_data.to_delete_task_title_to_minutes (normalize_text)."
+      ],
+      "reviewer_fired": true,
+      "reviewer_root_cause": "WRONG SCOPE",
+      "retry_noop": true,
+      "premature_strips": 1
+    },
+    {
+      "task_id": "fdc4b74_1",
+      "verdict": "CORRECT",
+      "correct": true,
+      "tests_passed": 8,
+      "tests_total": 8,
+      "seconds": 64.2,
+      "difficulty": 3,
+      "required_apps": [
+        "amazon",
+        "gmail",
+        "todoist"
+      ],
+      "instruction": "I am planning to buy a few things on amazon for my company's camping trip next week. I have drafted an email to my manager listing the items for confirmation, but the draft is missing individual prices. Please update them in the TODO placeholders and send the email.",
+      "failure_type": null,
+      "failed_asserts": [],
+      "reviewer_fired": false,
+      "reviewer_root_cause": null,
+      "retry_noop": false,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "fdc4b74_2",
+      "verdict": "CORRECT",
+      "correct": true,
+      "tests_passed": 8,
+      "tests_total": 8,
+      "seconds": 67.3,
+      "difficulty": 3,
+      "required_apps": [
+        "amazon",
+        "gmail",
+        "todoist"
+      ],
+      "instruction": "I am planning to buy a few things on amazon for my company's camping trip next week. I have drafted an email to my manager listing the items for confirmation, but the draft is missing individual prices. Please update them in the TODO placeholders and send the email.",
+      "failure_type": null,
+      "failed_asserts": [],
+      "reviewer_fired": false,
+      "reviewer_root_cause": null,
+      "retry_noop": false,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "fdc4b74_3",
+      "verdict": "WRONG",
+      "correct": false,
+      "tests_passed": 0,
+      "tests_total": 8,
+      "seconds": 45.8,
+      "difficulty": 3,
+      "required_apps": [
+        "amazon",
+        "gmail",
+        "todoist"
+      ],
+      "instruction": "I am planning to buy a few things on amazon for my company's camping trip next week. I have drafted an email to my manager listing the items for confirmation, but the draft is missing individual prices. Please update them in the TODO placeholders and send the email.",
+      "failure_type": "retry_killed_stale_eval",
+      "failed_asserts": [
+        "assert answers match.",
+        "assert model changes match gmail.Draft, gmail.UserEmailThread, gmail.GlobalEmailThread, gmail.Email.",
+        "assert 1 draft has been deleted from gmail.Draft using models.changed_records."
+      ],
+      "reviewer_fired": true,
+      "reviewer_root_cause": "WRONG ENTITY",
+      "retry_noop": true,
+      "premature_strips": 0
+    }
+  ]
+}

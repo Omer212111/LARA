@@ -1,0 +1,400 @@
+{
+  "slice": "amazon-random15",
+  "generated_at": "2026-07-20T16:07:38",
+  "log": "analysis/runs/amazon-random15.log",
+  "aggregate": {
+    "reviewer": {
+      "fired": 5,
+      "rescued": 0,
+      "retry_killed": 5,
+      "root_causes": {
+        "WRONG FORMAT": 1,
+        "WRONG FIELD": 1,
+        "ENVIRONMENT_ERROR": 1,
+        "WRONG FILTER": 1,
+        "WRONG SCOPE": 1
+      }
+    },
+    "premature_strips": 4,
+    "n_tasks": 15,
+    "n_correct": 7,
+    "success_rate": 0.467,
+    "by_difficulty": {
+      "1": {
+        "n": 2,
+        "correct": 2,
+        "rate": 1.0
+      },
+      "2": {
+        "n": 7,
+        "correct": 2,
+        "rate": 0.286
+      },
+      "3": {
+        "n": 6,
+        "correct": 3,
+        "rate": 0.5
+      }
+    },
+    "by_app_count": {
+      "3-app": {
+        "n": 11,
+        "correct": 4,
+        "rate": 0.364
+      },
+      "2-app": {
+        "n": 2,
+        "correct": 1,
+        "rate": 0.5
+      },
+      "1-app": {
+        "n": 1,
+        "correct": 1,
+        "rate": 1.0
+      },
+      "4-app": {
+        "n": 1,
+        "correct": 1,
+        "rate": 1.0
+      }
+    },
+    "failure_types": {
+      "code_error": 3,
+      "retry_killed_stale_eval": 3,
+      "no_submit": 2
+    },
+    "mean_seconds": 125.2
+  },
+  "records": [
+    {
+      "task_id": "1c4bd27_1",
+      "verdict": "CORRECT",
+      "correct": true,
+      "tests_passed": 4,
+      "tests_total": 4,
+      "seconds": 32.9,
+      "difficulty": 2,
+      "required_apps": [
+        "amazon",
+        "file_system",
+        "gmail"
+      ],
+      "instruction": "Initiate returns via FedEx for everything in my last 2 amazon order.",
+      "failure_type": null,
+      "failed_asserts": [],
+      "reviewer_fired": false,
+      "reviewer_root_cause": null,
+      "retry_noop": false,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "2e9b91e_1",
+      "verdict": "CORRECT",
+      "correct": true,
+      "tests_passed": 5,
+      "tests_total": 5,
+      "seconds": 25.3,
+      "difficulty": 1,
+      "required_apps": [
+        "amazon",
+        "venmo"
+      ],
+      "instruction": "Everything in my amazon cart is for my friend, Denise. Request them money for it on venmo. Ignore tax and delivery fees from the cart cost.",
+      "failure_type": null,
+      "failed_asserts": [],
+      "reviewer_fired": false,
+      "reviewer_root_cause": null,
+      "retry_noop": false,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "4242c97_1",
+      "verdict": "WRONG",
+      "correct": false,
+      "tests_passed": 6,
+      "tests_total": 8,
+      "seconds": 65.0,
+      "difficulty": 2,
+      "required_apps": [
+        "amazon",
+        "file_system",
+        "gmail"
+      ],
+      "instruction": "Make an order for two same-colored Hanes Men's ComfortSoft Short Sleeve T-Shirt in extra-large size on Amazon. My color preference is, red > black > navy blue. Pick the most preferred color that is available.",
+      "failure_type": "code_error",
+      "failed_asserts": [
+        "assert the ordered product is of name data.public.product_name.",
+        "assert the ordered product has color data.private.expected_color."
+      ],
+      "reviewer_fired": true,
+      "reviewer_root_cause": "WRONG FORMAT",
+      "retry_noop": true,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "6474048_3",
+      "verdict": "CORRECT",
+      "correct": true,
+      "tests_passed": 8,
+      "tests_total": 8,
+      "seconds": 69.6,
+      "difficulty": 2,
+      "required_apps": [
+        "amazon",
+        "file_system",
+        "gmail"
+      ],
+      "instruction": "Buy me a cutting board on amazon with at least 4.1 seller rating that will fit in my kitchen drawer of 12.0X9.5 (LxW) inches.",
+      "failure_type": null,
+      "failed_asserts": [],
+      "reviewer_fired": false,
+      "reviewer_root_cause": null,
+      "retry_noop": false,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "6588a51_3",
+      "verdict": "CORRECT",
+      "correct": true,
+      "tests_passed": 6,
+      "tests_total": 6,
+      "seconds": 31.4,
+      "difficulty": 1,
+      "required_apps": [
+        "amazon"
+      ],
+      "instruction": "Post a question about the last t-shirt I ordered on amazon, \"Do these t-shirts bleed color onto other clothing items in the same wash?\".",
+      "failure_type": null,
+      "failed_asserts": [],
+      "reviewer_fired": false,
+      "reviewer_root_cause": null,
+      "retry_noop": false,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "66b7899_3",
+      "verdict": "WRONG",
+      "correct": false,
+      "tests_passed": 1,
+      "tests_total": 5,
+      "seconds": 39.2,
+      "difficulty": 2,
+      "required_apps": [
+        "amazon",
+        "venmo"
+      ],
+      "instruction": "My amazon package that is to be delivered today was an order for Edwin. Request them the money for it on venmo.",
+      "failure_type": "retry_killed_stale_eval",
+      "failed_asserts": [
+        "assert model changes match venmo.Notification, venmo.PaymentRequest.",
+        "assert PaymentRequest has 1 added, 0 deleted and 0 changed records using models.changed_records.",
+        "assert this payment request's receiver user_id is private_data.relative_venmo_user_id."
+      ],
+      "reviewer_fired": true,
+      "reviewer_root_cause": "WRONG FIELD",
+      "retry_noop": true,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "7434096_1",
+      "verdict": "WRONG",
+      "correct": false,
+      "tests_passed": 4,
+      "tests_total": 6,
+      "seconds": 66.2,
+      "difficulty": 2,
+      "required_apps": [
+        "amazon",
+        "file_system",
+        "gmail"
+      ],
+      "instruction": "I bought a few Hanes Men's Tagless Crewneck Undershirts on amazon this week. But only the one in extra-large size fits me well. Initiate a return for the rest. Prefer UPS as a deliverer, if available.",
+      "failure_type": "code_error",
+      "failed_asserts": [
+        "obtain added amazon.ProductReturn using models.changed_records\\nand assert number of added product returns is 2.",
+        "build list_of_order_id_product_id_return_quantity from added_product_returns,\\nand assert it matches private_data.order_id_product_id_return_quantity."
+      ],
+      "reviewer_fired": true,
+      "reviewer_root_cause": "ENVIRONMENT_ERROR",
+      "retry_noop": true,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "7434096_3",
+      "verdict": "WRONG",
+      "correct": false,
+      "tests_passed": 5,
+      "tests_total": 6,
+      "seconds": 60.1,
+      "difficulty": 2,
+      "required_apps": [
+        "amazon",
+        "file_system",
+        "gmail"
+      ],
+      "instruction": "I bought a few Gildan Women's Softstyle Cotton T-Shirts on amazon this week. But only the one in large size fits me well. Initiate a return for the rest. Prefer FedEx as a deliverer, if available.",
+      "failure_type": "retry_killed_stale_eval",
+      "failed_asserts": [
+        "build list_of_order_id_product_id_return_quantity from added_product_returns,\\nand assert it matches private_data.order_id_product_id_return_quantity."
+      ],
+      "reviewer_fired": true,
+      "reviewer_root_cause": "WRONG FILTER",
+      "retry_noop": true,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "7e1be84_2",
+      "verdict": "CORRECT",
+      "correct": true,
+      "tests_passed": 8,
+      "tests_total": 8,
+      "seconds": 45.4,
+      "difficulty": 3,
+      "required_apps": [
+        "amazon",
+        "file_system",
+        "gmail",
+        "phone"
+      ],
+      "instruction": "Buy me a stand mixer as Connor recommended in their phone message.",
+      "failure_type": null,
+      "failed_asserts": [],
+      "reviewer_fired": false,
+      "reviewer_root_cause": null,
+      "retry_noop": false,
+      "premature_strips": 1
+    },
+    {
+      "task_id": "9b2dc64_2",
+      "verdict": "WRONG",
+      "correct": false,
+      "tests_passed": 9,
+      "tests_total": 10,
+      "seconds": 76.6,
+      "difficulty": 2,
+      "required_apps": [
+        "amazon",
+        "file_system",
+        "gmail"
+      ],
+      "instruction": "I liked that last sweater I bought on amazon. Place a new order for the same in black and red, one each. Make sure to get the size as per that order, and have them delivered home.",
+      "failure_type": "retry_killed_stale_eval",
+      "failed_asserts": [
+        "assert 1 record has been added to amazon.Order using models.changed_records."
+      ],
+      "reviewer_fired": true,
+      "reviewer_root_cause": "WRONG SCOPE",
+      "retry_noop": true,
+      "premature_strips": 1
+    },
+    {
+      "task_id": "e201314_3",
+      "verdict": "CORRECT",
+      "correct": true,
+      "tests_passed": 11,
+      "tests_total": 11,
+      "seconds": 59.4,
+      "difficulty": 3,
+      "required_apps": [
+        "amazon",
+        "file_system",
+        "gmail"
+      ],
+      "instruction": "I am throwing a party for all of my coworkers and roommates upcoming Saturday night. I need return gifts for them. Buy fitness trackers on amazon with at least 4.1 rating, and with 7 or more reviews, one for each invitee, and make sure they reach home by the end of the day before the party.",
+      "failure_type": null,
+      "failed_asserts": [],
+      "reviewer_fired": false,
+      "reviewer_root_cause": null,
+      "retry_noop": false,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "efc3cea_1",
+      "verdict": "WRONG",
+      "correct": false,
+      "tests_passed": 3,
+      "tests_total": 9,
+      "seconds": 374.0,
+      "difficulty": 3,
+      "required_apps": [
+        "amazon",
+        "file_system",
+        "gmail"
+      ],
+      "instruction": "I am going to Japan this weekend, and my check-in bag sums to 21kg so far. Place an amazon order for any 4 identical backpacks. Make sure the total weight does not exceed the allowed weight for my check-in bag according to my flight confirmation. These are gifts, so get them gift wrapped if there is an option, and send them to my home address.",
+      "failure_type": "code_error",
+      "failed_asserts": [
+        "assert 1 new order has been added by models.changed_records, which is for main_user.",
+        "assert this new order has public_data.purchase_count quantity of a single product.",
+        "assert the ordered product's weight times quantity is <= data.private.weight_budget_left."
+      ],
+      "reviewer_fired": false,
+      "reviewer_root_cause": null,
+      "retry_noop": false,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "fdc4b74_2",
+      "verdict": "CORRECT",
+      "correct": true,
+      "tests_passed": 8,
+      "tests_total": 8,
+      "seconds": 48.9,
+      "difficulty": 3,
+      "required_apps": [
+        "amazon",
+        "gmail",
+        "todoist"
+      ],
+      "instruction": "I am planning to buy a few things on amazon for my company's camping trip next week. I have drafted an email to my manager listing the items for confirmation, but the draft is missing individual prices. Please update them in the TODO placeholders and send the email.",
+      "failure_type": null,
+      "failed_asserts": [],
+      "reviewer_fired": false,
+      "reviewer_root_cause": null,
+      "retry_noop": false,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "b6d1f70_3",
+      "verdict": "NOT_CALLED",
+      "correct": false,
+      "tests_passed": null,
+      "tests_total": null,
+      "seconds": 378.1,
+      "difficulty": 3,
+      "required_apps": [
+        "amazon",
+        "file_system",
+        "gmail"
+      ],
+      "instruction": "Buy 2 identical headphones from amazon with at least 5 reviews and at least 4.5 rating. Deliver one to my mother's home with gift wrapping and one to my home without gift wrapping.",
+      "failure_type": "no_submit",
+      "failed_asserts": [],
+      "reviewer_fired": false,
+      "reviewer_root_cause": null,
+      "retry_noop": false,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "dc5c5c6_2",
+      "verdict": "NOT_CALLED",
+      "correct": false,
+      "tests_passed": null,
+      "tests_total": null,
+      "seconds": 505.3,
+      "difficulty": 3,
+      "required_apps": [
+        "amazon",
+        "file_system",
+        "gmail"
+      ],
+      "instruction": "Buy me the top-rated watch that's available now on amazon for each of my brothers, and have it delivered to their homes with gift wrapping. I want to give them identical gifts.",
+      "failure_type": "no_submit",
+      "failed_asserts": [],
+      "reviewer_fired": false,
+      "reviewer_root_cause": null,
+      "retry_noop": false,
+      "premature_strips": 2
+    }
+  ]
+}

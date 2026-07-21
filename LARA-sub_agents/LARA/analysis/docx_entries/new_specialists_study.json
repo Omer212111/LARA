@@ -1,0 +1,76 @@
+{
+  "name": "Per-App Capability Study, Part 2 — Amazon / Gmail / Splitwise / Todoist (60 tasks)",
+  "date": "20/07/2026",
+  "author": "Omer",
+  "objective": [
+    "Primary Goal: Extend the Part 1 study (Spotify / Phone / Venmo, 45 tasks) to the four remaining testable apps, and in particular give the branch's two new specialists — Splitwise and Todoist — a real evaluation. 15 tasks per app, sampled at random with seed 20260720. Total across both parts: 105 tasks.",
+    "CORRECTION to Part 1: Part 1 concluded that Splitwise, Todoist, Amazon, Gmail and API-Docs could not be tested at all, because the installed train+dev pool (147 tasks) contains no tasks for them and the test_* splits appeared to withhold ground truth. That conclusion was WRONG. The test splits withhold only required_apps.json and solution.py; they DO ship evaluation.py, test_data.json and private_data.json — everything world.evaluate() needs. Test tasks score normally, they simply carry no app label. Verified directly: splitwise task 3aa1a22_1 from the test split ran end-to-end and scored 7/7 CORRECT. This unlocked 585 additional tasks.",
+    "Recovering the missing app labels: sample_tasks.infer_apps() reads the models that evaluation.py asserts on (e.g. venmo.Friendship, splitwise.Expense) plus the instruction text and other shipped ground-truth files. Validated against the 147 tasks where the true label IS known: 84% of tasks get a label set covering the truth, with occasional over-prediction and never a wrong app — acceptable for sampling, since running the task verifies it.",
+    "Hypothesis going in: the new Splitwise and Todoist specialists would score poorly, but for a reason that must be separated from specialist quality — all 18 todoist tasks in the dataset are difficulty 3, and 18 of 21 splitwise tasks are, with several spanning six apps at once."
+  ],
+  "environment": [
+    "Branch: feat/specialists-and-success-rate, commit dfb58c7 (Gilad). Isolated git worktree.",
+    "Models: Executor / Explorer / Reviewer all gpt-4.1-mini | Temperature=0.1",
+    "Parameters: MAX_ITERATIONS=6 | MAX_EXECUTOR_RUNS=2 | MAX_REACT_STEPS=16",
+    "Scoring: world.evaluate() — the official AppWorld scorer.",
+    "Slices: amazon-random15, gmail-random15, splitwise-random15, todoist-random15, sampled across all four splits.",
+    "Artifacts: analysis/CAPABILITY_STUDY_2026-07-20.md, analysis/runs/<slice>.report.md / .results.json / .run_log.html"
+  ],
+  "quantitative": [
+    "Combined result across both parts: 42/105 correct (40%).",
+    {"table": {
+      "headers": ["App", "Correct", "Rate", "Mean time", "Reviewer fired/rescued"],
+      "rows": [
+        ["Spotify", "10/15", "67%", "26.3s", "6 / 1"],
+        ["Phone", "8/15", "53%", "43.0s", "7 / 0"],
+        ["Venmo", "7/15", "47%", "68.3s", "7 / 0"],
+        ["Amazon", "7/15", "47%", "125.2s", "5 / 0"],
+        ["Gmail", "6/15", "40%", "45.1s", "7 / 0"],
+        ["Todoist", "3/15", "20%", "66.1s", "12 / 0"],
+        ["Splitwise", "1/15", "7%", "71.8s", "14 / 0"],
+        ["TOTAL", "42/105", "40%", "", "58 / 1"]
+      ]
+    }},
+    "Pooled by task breadth — the dominant signal:",
+    {"table": {
+      "headers": ["Apps required", "n", "Correct", "Rate"],
+      "rows": [
+        ["1-app", "24", "14", "58%"],
+        ["2-app", "35", "17", "49%"],
+        ["3-app", "31", "9", "29%"],
+        ["4-app", "6", "2", "33%"],
+        ["5-app", "3", "0", "0%"],
+        ["6-app", "6", "0", "0%"]
+      ]
+    }},
+    "Pooled by difficulty:",
+    {"table": {
+      "headers": ["Difficulty", "n", "Correct", "Rate"],
+      "rows": [["1 (easy)", "26", "16", "62%"], ["2 (medium)", "30", "17", "57%"], ["3 (hard)", "49", "9", "18%"]]
+    }},
+    "Failure categories across all 105 tasks:",
+    {"table": {
+      "headers": ["Category", "Count"],
+      "rows": [["retry_killed_stale_eval", "36"], ["code_error", "21"], ["sandbox_timeout", "3"], ["no_submit", "3"]]
+    }}
+  ],
+  "qualitative": [
+    "Finding 1 — BOTH NEW SPECIALISTS ARE SOUND. This is the headline result and it contradicts what the raw scores suggest. Splitwise scored 1/15 and Todoist 3/15, but auditing every API call they made against the shipped docs shows zero hallucinations. Splitwise called show_groups x20, record_expense x20, search_users x10, record_payment x10, attach_expense_receipt_file x10, accept_group_invitation x6, post_payment_comment x2 — all real members of the 65-API Splitwise surface. Todoist called show_projects x45, show_tasks x43, show_task_comments x18, update_task x15, post_task_comment x13, delete_task x10, assign_or_unassign_task x6, create_task x5 — all real members of the 56-API Todoist surface. Partial-credit patterns confirm it: the three 6-app 988af8e_* tasks each scored exactly 9/24, with the agent completing the Splitwise portion and failing the amazon/todoist/venmo work around it; 83a7951_3 reached 9/10. The most-failed assertions name OTHER apps ('assert model changes match todoist.Task, amazon.Order, splitwise.Group...' x3). Their low scores measure task breadth, not their own correctness.",
+    "Finding 2 — Task breadth is the dominant predictor of failure, and it collapses monotonically past two apps: 1-app 58%, 2-app 49%, 3-app 29%, 5-app 0%, 6-app 0%. Nine tasks in the study span five or more apps and NOT ONE was solved. The per-app rates are therefore largely a proxy for how broad that app's tasks are — Splitwise scores 7% because 10 of its 15 tasks span 3+ apps, while Spotify scores 67% because 14 of 15 are single-app.",
+    "Finding 3 — Amazon is the informative exception to Finding 2. Its 3-app tasks scored 4/11 (36%) against 1/9 (11%) for phone/venmo 3-app tasks, and it solved a 4-app difficulty-3 task (7e1be84_2, 8/8) and an 11-assertion difficulty-3 task (e201314_3, 11/11) outright. Difficulty-3 actually OUTPERFORMED difficulty-2 on Amazon. So '3-app' is not one uniform difficulty class — breadth interacts with which apps combine, and amazon+gmail+file_system coordinates better than phone+venmo+simple_note. This matters because it means the multi-app ceiling is tractable rather than inherent.",
+    "Finding 4 — The Reviewer retry path is completely broken, now measured at scale: 58 fires, 1 rescue across 105 tasks. retry_killed_stale_eval is the single largest failure category, 36 of 63 failures (57%). The mechanism, established in Part 1 and unchanged: the premature-submit guard (base.py:366) strips the retry's complete_task() call, then evaluate_task() (base.py:447) reads env.task_completed() (tools.py:45), which is STICKY and still True from attempt 1, carrying attempt 1's wrong verdict; the orchestrator sees completed=True/correct=False and breaks the ReAct loop at step 1. The retry's corrected answer is computed and then discarded.",
+    "Finding 5 — Difficulty 1 and 2 are statistically indistinguishable (62% vs 57%); only difficulty 3 collapses (18%). Since difficulty-3 tasks are also the multi-app ones, this largely restates Finding 2 rather than adding an independent signal."
+  ],
+  "conclusions": [
+    "Key Insight: the study set out to rank the app specialists and found that specialist quality is largely NOT the bottleneck. The two newest specialists are demonstrably correct at the API level. Two pipeline-level defects — the dead Reviewer retry path and multi-app coordination — account for the great majority of failures, and both are app-agnostic.",
+    "Action Items, in priority order:",
+    {"bullets": [
+      "Fix the retry path. It gates 36 of 63 failures. Make evaluate_task() attempt-scoped: track a per-attempt 'submitted' flag and only break the ReAct loop when THIS attempt submitted. Cheapest, highest-yield fix available.",
+      "Target multi-app coordination (5+ apps: 0 of 9 solved). Amazon's relative success on 3-app tasks (36%) suggests this ceiling is tractable, not inherent.",
+      "Do NOT judge the Splitwise and Todoist specialists on their 7% and 20% scores. Re-measure after the retry fix, ideally restricted to the <=2-app subset (6 splitwise, 9 todoist tasks exist).",
+      "Require repeat runs before trusting any A/B. Measured variance is large: task 4fab96f_2 scored 8/8 in 38s in one run and 3/8 in 390s in another, same code and temperature.",
+      "Obtain or hand-write api_docs tasks — that specialist has zero tasks in any split and has still never been executed."
+    ]},
+    "Caveat: 15 tasks per app is a small sample, and the demonstrated run-to-run variance means individual per-task results should not be treated as evidence. Only the aggregate patterns above are reliable."
+  ]
+}

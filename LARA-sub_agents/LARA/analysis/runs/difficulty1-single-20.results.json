@@ -1,0 +1,425 @@
+{
+  "slice": "difficulty1-single-20",
+  "generated_at": "2026-07-20T19:32:39",
+  "log": "analysis/runs/difficulty1-single-20.log",
+  "aggregate": {
+    "reviewer": {
+      "fired": 2,
+      "rescued": 0,
+      "retry_killed": 2,
+      "root_causes": {
+        "ENVIRONMENT_ERROR": 2
+      }
+    },
+    "premature_strips": 4,
+    "n_tasks": 20,
+    "n_correct": 17,
+    "success_rate": 0.85,
+    "by_difficulty": {
+      "1": {
+        "n": 20,
+        "correct": 17,
+        "rate": 0.85
+      }
+    },
+    "by_app_count": {
+      "1-app": {
+        "n": 20,
+        "correct": 17,
+        "rate": 0.85
+      }
+    },
+    "failure_types": {
+      "sandbox_timeout": 2,
+      "no_submit": 1
+    },
+    "mean_seconds": 31.4
+  },
+  "records": [
+    {
+      "task_id": "07b42fd_2",
+      "verdict": "CORRECT",
+      "correct": true,
+      "tests_passed": 5,
+      "tests_total": 5,
+      "seconds": 24.7,
+      "difficulty": 1,
+      "required_apps": [
+        "spotify"
+      ],
+      "instruction": "Follow all the edm artists on Spotify that have at least 23 followers.",
+      "failure_type": null,
+      "failed_asserts": [],
+      "reviewer_fired": false,
+      "reviewer_root_cause": null,
+      "retry_noop": false,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "166f4ff_1",
+      "verdict": "CORRECT",
+      "correct": true,
+      "tests_passed": 2,
+      "tests_total": 2,
+      "seconds": 42.7,
+      "difficulty": 1,
+      "required_apps": [
+        "venmo"
+      ],
+      "instruction": "How much money have I been requested on Venmo in the last 7 days (including today)? ",
+      "failure_type": null,
+      "failed_asserts": [],
+      "reviewer_fired": false,
+      "reviewer_root_cause": null,
+      "retry_noop": false,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "21abae1_1",
+      "verdict": "CORRECT",
+      "correct": true,
+      "tests_passed": 2,
+      "tests_total": 2,
+      "seconds": 22.2,
+      "difficulty": 1,
+      "required_apps": [
+        "venmo"
+      ],
+      "instruction": "How much money have I sent to others on venmo this month so far?",
+      "failure_type": null,
+      "failed_asserts": [],
+      "reviewer_fired": false,
+      "reviewer_root_cause": null,
+      "retry_noop": false,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "23cf851_1",
+      "verdict": "CORRECT",
+      "correct": true,
+      "tests_passed": 2,
+      "tests_total": 2,
+      "seconds": 33.1,
+      "difficulty": 1,
+      "required_apps": [
+        "venmo"
+      ],
+      "instruction": "How many likes did all Venmo transactions, I sent this month, have in total?",
+      "failure_type": null,
+      "failed_asserts": [],
+      "reviewer_fired": false,
+      "reviewer_root_cause": null,
+      "retry_noop": false,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "27e1026_2",
+      "verdict": "CORRECT",
+      "correct": true,
+      "tests_passed": 2,
+      "tests_total": 2,
+      "seconds": 55.8,
+      "difficulty": 1,
+      "required_apps": [
+        "spotify"
+      ],
+      "instruction": "What is the title of the newest released song in my Spotify account from across my song, album and playlist libraries?",
+      "failure_type": null,
+      "failed_asserts": [],
+      "reviewer_fired": false,
+      "reviewer_root_cause": null,
+      "retry_noop": false,
+      "premature_strips": 2
+    },
+    {
+      "task_id": "287e338_1",
+      "verdict": "CORRECT",
+      "correct": true,
+      "tests_passed": 2,
+      "tests_total": 2,
+      "seconds": 17.2,
+      "difficulty": 1,
+      "required_apps": [
+        "spotify"
+      ],
+      "instruction": "Name the artist most recommended to me on Spotify.",
+      "failure_type": null,
+      "failed_asserts": [],
+      "reviewer_fired": false,
+      "reviewer_root_cause": null,
+      "retry_noop": false,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "287e338_3",
+      "verdict": "CORRECT",
+      "correct": true,
+      "tests_passed": 2,
+      "tests_total": 2,
+      "seconds": 15.4,
+      "difficulty": 1,
+      "required_apps": [
+        "spotify"
+      ],
+      "instruction": "Name the artist most recommended to me on Spotify.",
+      "failure_type": null,
+      "failed_asserts": [],
+      "reviewer_fired": false,
+      "reviewer_root_cause": null,
+      "retry_noop": false,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "365e0a3_3",
+      "verdict": "CORRECT",
+      "correct": true,
+      "tests_passed": 2,
+      "tests_total": 2,
+      "seconds": 24.4,
+      "difficulty": 1,
+      "required_apps": [
+        "amazon"
+      ],
+      "instruction": "How much have I paid in prime membership since I made the amazon account?",
+      "failure_type": null,
+      "failed_asserts": [],
+      "reviewer_fired": false,
+      "reviewer_root_cause": null,
+      "retry_noop": false,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "4d12842_3",
+      "verdict": "CORRECT",
+      "correct": true,
+      "tests_passed": 4,
+      "tests_total": 4,
+      "seconds": 31.2,
+      "difficulty": 1,
+      "required_apps": [
+        "gmail"
+      ],
+      "instruction": "Delete all my archived gmail threads that are from this or the last calendar month.",
+      "failure_type": null,
+      "failed_asserts": [],
+      "reviewer_fired": false,
+      "reviewer_root_cause": null,
+      "retry_noop": false,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "57c3486_1",
+      "verdict": "WRONG",
+      "correct": false,
+      "tests_passed": 4,
+      "tests_total": 5,
+      "seconds": 41.8,
+      "difficulty": 1,
+      "required_apps": [
+        "spotify"
+      ],
+      "instruction": "Like all the songs from the artists I follow on Spotify.",
+      "failure_type": "sandbox_timeout",
+      "failed_asserts": [
+        "assert all songs from artists main_user follows are liked now by using\\nprivate_data.followed_artist_song_ids."
+      ],
+      "reviewer_fired": true,
+      "reviewer_root_cause": "ENVIRONMENT_ERROR",
+      "retry_noop": true,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "59fae45_1",
+      "verdict": "CORRECT",
+      "correct": true,
+      "tests_passed": 6,
+      "tests_total": 6,
+      "seconds": 29.1,
+      "difficulty": 1,
+      "required_apps": [
+        "spotify"
+      ],
+      "instruction": "Update all my Spotify playlist titles with the most common song genre in that playlist in this format: \"<original_title> | <most_common_genre>\". Replace <original_title> and <most_common_genre> with the actual values.",
+      "failure_type": null,
+      "failed_asserts": [],
+      "reviewer_fired": false,
+      "reviewer_root_cause": null,
+      "retry_noop": false,
+      "premature_strips": 1
+    },
+    {
+      "task_id": "5a83b05_1",
+      "verdict": "CORRECT",
+      "correct": true,
+      "tests_passed": 3,
+      "tests_total": 3,
+      "seconds": 26.0,
+      "difficulty": 1,
+      "required_apps": [
+        "file_system"
+      ],
+      "instruction": "Delete all .pdf files from my file system ~/downloads folder.",
+      "failure_type": null,
+      "failed_asserts": [],
+      "reviewer_fired": false,
+      "reviewer_root_cause": null,
+      "retry_noop": false,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "5e27cd7_2",
+      "verdict": "CORRECT",
+      "correct": true,
+      "tests_passed": 4,
+      "tests_total": 4,
+      "seconds": 20.9,
+      "difficulty": 1,
+      "required_apps": [
+        "gmail"
+      ],
+      "instruction": "Delete all my Gmail drafts that have empty subject or body.",
+      "failure_type": null,
+      "failed_asserts": [],
+      "reviewer_fired": false,
+      "reviewer_root_cause": null,
+      "retry_noop": false,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "6588a51_2",
+      "verdict": "CORRECT",
+      "correct": true,
+      "tests_passed": 6,
+      "tests_total": 6,
+      "seconds": 27.5,
+      "difficulty": 1,
+      "required_apps": [
+        "amazon"
+      ],
+      "instruction": "Post a question about the last sweater I ordered on amazon, \"Are there any specific detergents or products you recommend for preserving colors?\".",
+      "failure_type": null,
+      "failed_asserts": [],
+      "reviewer_fired": false,
+      "reviewer_root_cause": null,
+      "retry_noop": false,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "68ee2c9_1",
+      "verdict": "CORRECT",
+      "correct": true,
+      "tests_passed": 5,
+      "tests_total": 5,
+      "seconds": 41.3,
+      "difficulty": 1,
+      "required_apps": [
+        "file_system"
+      ],
+      "instruction": "In my file system, add the prefix \"YYYY-MM-DD_\" to all file names in the ~/downloads/ directory, based on their creation dates, and then move all files not from this year to ~/trash/.",
+      "failure_type": null,
+      "failed_asserts": [],
+      "reviewer_fired": false,
+      "reviewer_root_cause": null,
+      "retry_noop": false,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "771d8fc_3",
+      "verdict": "WRONG",
+      "correct": false,
+      "tests_passed": 4,
+      "tests_total": 6,
+      "seconds": 63.2,
+      "difficulty": 1,
+      "required_apps": [
+        "phone"
+      ],
+      "instruction": "All phone text messages and voice messages from 5708520672 are spam, delete them.",
+      "failure_type": "sandbox_timeout",
+      "failed_asserts": [
+        "assert their ids match private_data.to_delete_text_message_ids (ignore order).",
+        "assert their ids match private_data.to_delete_voice_message_ids (ignore order)."
+      ],
+      "reviewer_fired": true,
+      "reviewer_root_cause": "ENVIRONMENT_ERROR",
+      "retry_noop": true,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "a30375d_2",
+      "verdict": "CORRECT",
+      "correct": true,
+      "tests_passed": 3,
+      "tests_total": 3,
+      "seconds": 22.1,
+      "difficulty": 1,
+      "required_apps": [
+        "simple_note"
+      ],
+      "instruction": "Give me a random inspirational quote from my SimpleNote note about it. Just the quote, nothing else.",
+      "failure_type": null,
+      "failed_asserts": [],
+      "reviewer_fired": false,
+      "reviewer_root_cause": null,
+      "retry_noop": false,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "dac78d9_2",
+      "verdict": "CORRECT",
+      "correct": true,
+      "tests_passed": 2,
+      "tests_total": 2,
+      "seconds": 34.0,
+      "difficulty": 1,
+      "required_apps": [
+        "venmo"
+      ],
+      "instruction": "How many venmo friends have I made since the start of October last year?",
+      "failure_type": null,
+      "failed_asserts": [],
+      "reviewer_fired": false,
+      "reviewer_root_cause": null,
+      "retry_noop": false,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "e7a10f8_2",
+      "verdict": "CORRECT",
+      "correct": true,
+      "tests_passed": 2,
+      "tests_total": 2,
+      "seconds": 26.1,
+      "difficulty": 1,
+      "required_apps": [
+        "spotify"
+      ],
+      "instruction": "How long is my shortest Spotify playlist, in minutes, rounded to the nearest number?",
+      "failure_type": null,
+      "failed_asserts": [],
+      "reviewer_fired": false,
+      "reviewer_root_cause": null,
+      "retry_noop": false,
+      "premature_strips": 1
+    },
+    {
+      "task_id": "6a5e690_3",
+      "verdict": "NOT_CALLED",
+      "correct": false,
+      "tests_passed": null,
+      "tests_total": null,
+      "seconds": 29.1,
+      "difficulty": 1,
+      "required_apps": [
+        "gmail"
+      ],
+      "instruction": "Send all my future-scheduled emails on Gmail right away.",
+      "failure_type": "no_submit",
+      "failed_asserts": [],
+      "reviewer_fired": false,
+      "reviewer_root_cause": null,
+      "retry_noop": false,
+      "premature_strips": 0
+    }
+  ]
+}

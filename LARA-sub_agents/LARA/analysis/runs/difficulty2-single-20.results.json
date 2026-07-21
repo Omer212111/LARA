@@ -1,0 +1,474 @@
+{
+  "slice": "difficulty2-single-20",
+  "generated_at": "2026-07-20T19:47:45",
+  "log": "analysis/runs/difficulty2-single-20.log",
+  "aggregate": {
+    "reviewer": {
+      "fired": 6,
+      "rescued": 0,
+      "retry_killed": 6,
+      "root_causes": {
+        "WRONG FILTER": 3,
+        "WRONG ENTITY": 2,
+        "WRONG FORMAT": 1
+      }
+    },
+    "premature_strips": 1,
+    "n_tasks": 20,
+    "n_correct": 14,
+    "success_rate": 0.7,
+    "by_difficulty": {
+      "2": {
+        "n": 20,
+        "correct": 14,
+        "rate": 0.7
+      }
+    },
+    "by_app_count": {
+      "1-app": {
+        "n": 8,
+        "correct": 7,
+        "rate": 0.875
+      },
+      "3-app": {
+        "n": 11,
+        "correct": 7,
+        "rate": 0.636
+      },
+      "2-app": {
+        "n": 1,
+        "correct": 0,
+        "rate": 0.0
+      }
+    },
+    "failure_types": {
+      "retry_killed_stale_eval": 5,
+      "code_error": 1
+    },
+    "mean_seconds": 43.2
+  },
+  "records": [
+    {
+      "task_id": "09ac073_2",
+      "verdict": "CORRECT",
+      "correct": true,
+      "tests_passed": 6,
+      "tests_total": 6,
+      "seconds": 53.6,
+      "difficulty": 2,
+      "required_apps": [
+        "gmail"
+      ],
+      "instruction": "Delete all my read Gmail threads from inbox/outbox, except the ones that have some priority label and are also starred.",
+      "failure_type": null,
+      "failed_asserts": [],
+      "reviewer_fired": false,
+      "reviewer_root_cause": null,
+      "retry_noop": false,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "4242c97_1",
+      "verdict": "CORRECT",
+      "correct": true,
+      "tests_passed": 8,
+      "tests_total": 8,
+      "seconds": 43.5,
+      "difficulty": 2,
+      "required_apps": [
+        "amazon",
+        "file_system",
+        "gmail"
+      ],
+      "instruction": "Make an order for two same-colored Hanes Men's ComfortSoft Short Sleeve T-Shirt in extra-large size on Amazon. My color preference is, red > black > navy blue. Pick the most preferred color that is available.",
+      "failure_type": null,
+      "failed_asserts": [],
+      "reviewer_fired": false,
+      "reviewer_root_cause": null,
+      "retry_noop": false,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "476b213_1",
+      "verdict": "CORRECT",
+      "correct": true,
+      "tests_passed": 2,
+      "tests_total": 2,
+      "seconds": 24.6,
+      "difficulty": 2,
+      "required_apps": [
+        "amazon"
+      ],
+      "instruction": "Tell me the card name I used for my last amazon prime membership payment?",
+      "failure_type": null,
+      "failed_asserts": [],
+      "reviewer_fired": false,
+      "reviewer_root_cause": null,
+      "retry_noop": false,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "4815c06_1",
+      "verdict": "CORRECT",
+      "correct": true,
+      "tests_passed": 9,
+      "tests_total": 9,
+      "seconds": 61.5,
+      "difficulty": 2,
+      "required_apps": [
+        "amazon",
+        "file_system",
+        "gmail"
+      ],
+      "instruction": "Place an amazon order for 1 quantity of 'Sony PlayStation 5', 1 quantity of 'Etekcity Food Kitchen Scale' and 1 quantity of 'Xbox Series S Console', and have it delivered to my home. Use Discover payment card if it's already in my account, otherwise use what I have in it. Also, I have important things in my cart, so revert its state to as it is now after the order.",
+      "failure_type": null,
+      "failed_asserts": [],
+      "reviewer_fired": false,
+      "reviewer_root_cause": null,
+      "retry_noop": false,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "6171bbc_2",
+      "verdict": "CORRECT",
+      "correct": true,
+      "tests_passed": 7,
+      "tests_total": 7,
+      "seconds": 33.8,
+      "difficulty": 2,
+      "required_apps": [
+        "spotify"
+      ],
+      "instruction": "Make me a Spotify playlist called \"My Highest Rated Playlist Songs\" containing only the highest-rated song from each of my playlists.",
+      "failure_type": null,
+      "failed_asserts": [],
+      "reviewer_fired": false,
+      "reviewer_root_cause": null,
+      "retry_noop": false,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "6474048_1",
+      "verdict": "CORRECT",
+      "correct": true,
+      "tests_passed": 8,
+      "tests_total": 8,
+      "seconds": 42.3,
+      "difficulty": 2,
+      "required_apps": [
+        "amazon",
+        "file_system",
+        "gmail"
+      ],
+      "instruction": "Buy me a microwave on amazon with at least 4.2 seller rating that will fit in my kitchen countertop of 17.3X15.3 (LxW) inches.",
+      "failure_type": null,
+      "failed_asserts": [],
+      "reviewer_fired": false,
+      "reviewer_root_cause": null,
+      "retry_noop": false,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "6474048_3",
+      "verdict": "CORRECT",
+      "correct": true,
+      "tests_passed": 8,
+      "tests_total": 8,
+      "seconds": 33.3,
+      "difficulty": 2,
+      "required_apps": [
+        "amazon",
+        "file_system",
+        "gmail"
+      ],
+      "instruction": "Buy me a cutting board on amazon with at least 4.1 seller rating that will fit in my kitchen drawer of 12.0X9.5 (LxW) inches.",
+      "failure_type": null,
+      "failed_asserts": [],
+      "reviewer_fired": false,
+      "reviewer_root_cause": null,
+      "retry_noop": false,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "77bcb81_3",
+      "verdict": "WRONG",
+      "correct": false,
+      "tests_passed": 2,
+      "tests_total": 7,
+      "seconds": 58.8,
+      "difficulty": 2,
+      "required_apps": [
+        "amazon",
+        "file_system",
+        "gmail"
+      ],
+      "instruction": "Place an order for everything in my amazon cart and wishlist for my home address.",
+      "failure_type": "retry_killed_stale_eval",
+      "failed_asserts": [
+        "assert model changes match\\namazon.Product, amazon.Order, amazon.OrderItem,\\ngmail.UserEmailThread, gmail.GlobalEmailThread, file_system.Directory, amazon.User\\ngmail.Email, gmail.Attachment, file_system.File, ignoring\\namazon.CartEntry, amazon.WishListEntry, amazon.Address.",
+        "assert there is 1 new amazon.Order using models.changed_records.",
+        "assert the set of product_ids in the new order match the set of keys\\nof private_data.to_order_product_id_to_quantity."
+      ],
+      "reviewer_fired": true,
+      "reviewer_root_cause": "WRONG FILTER",
+      "retry_noop": true,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "953b296_3",
+      "verdict": "CORRECT",
+      "correct": true,
+      "tests_passed": 9,
+      "tests_total": 9,
+      "seconds": 49.5,
+      "difficulty": 2,
+      "required_apps": [
+        "amazon",
+        "file_system",
+        "gmail"
+      ],
+      "instruction": "Buy me any t-shirt in my size on amazon. Assure from QAs/reviews that no one has reported its color fading after washing. Obtain my size from any of my past t-shirt orders.",
+      "failure_type": null,
+      "failed_asserts": [],
+      "reviewer_fired": false,
+      "reviewer_root_cause": null,
+      "retry_noop": false,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "9b2dc64_1",
+      "verdict": "CORRECT",
+      "correct": true,
+      "tests_passed": 10,
+      "tests_total": 10,
+      "seconds": 45.8,
+      "difficulty": 2,
+      "required_apps": [
+        "amazon",
+        "file_system",
+        "gmail"
+      ],
+      "instruction": "I liked that last t-shirt I bought on amazon. Place a new order for the same in navy blue and black, one each. Make sure to get the size as per that order, and have them delivered home.",
+      "failure_type": null,
+      "failed_asserts": [],
+      "reviewer_fired": false,
+      "reviewer_root_cause": null,
+      "retry_noop": false,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "a8f302f_1",
+      "verdict": "CORRECT",
+      "correct": true,
+      "tests_passed": 9,
+      "tests_total": 9,
+      "seconds": 36.1,
+      "difficulty": 2,
+      "required_apps": [
+        "amazon",
+        "file_system",
+        "gmail"
+      ],
+      "instruction": "I have a few things in my amazon cart. For each product type in it, buy the cheapest product and move the rest to the wish list.",
+      "failure_type": null,
+      "failed_asserts": [],
+      "reviewer_fired": false,
+      "reviewer_root_cause": null,
+      "retry_noop": false,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "aa8502b_1",
+      "verdict": "CORRECT",
+      "correct": true,
+      "tests_passed": 4,
+      "tests_total": 4,
+      "seconds": 20.7,
+      "difficulty": 2,
+      "required_apps": [
+        "spotify"
+      ],
+      "instruction": "Follow all the artists who have sung at least one song I have liked on Spotify.",
+      "failure_type": null,
+      "failed_asserts": [],
+      "reviewer_fired": false,
+      "reviewer_root_cause": null,
+      "retry_noop": false,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "af84964_1",
+      "verdict": "WRONG",
+      "correct": false,
+      "tests_passed": 9,
+      "tests_total": 11,
+      "seconds": 92.6,
+      "difficulty": 2,
+      "required_apps": [
+        "gmail",
+        "simple_note"
+      ],
+      "instruction": "Respond to all the emails I have received within the last 5 days (including today) that I have not replied to yet. The reply should be \"I am on a vacation until 2023-05-20. I will get back to you as soon as possible.\". If there are multiple people involved in a email thread, make sure to add all to the reply email. Please also mark the threads you reply to as unread and starred, so I know where to start when I get back.",
+      "failure_type": "retry_killed_stale_eval",
+      "failed_asserts": [
+        "assert all updated threads' IDs that belong to main_user's gmail account\\nmatch private_data.to_reply_to_thread_ids (ignore order).",
+        "set gmail.UserEmailThread with ID private_data.to_reply_to_thread_ids to be incoming_threads,\\nand assert all replied_to_threads are starred."
+      ],
+      "reviewer_fired": true,
+      "reviewer_root_cause": "WRONG FORMAT",
+      "retry_noop": true,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "b0934aa_2",
+      "verdict": "WRONG",
+      "correct": false,
+      "tests_passed": 3,
+      "tests_total": 11,
+      "seconds": 42.5,
+      "difficulty": 2,
+      "required_apps": [
+        "amazon",
+        "file_system",
+        "gmail"
+      ],
+      "instruction": "Buy me a external hard drive on amazon under $50 (excluding tax), over 3.8 rating, and over 6 reviews, and have it delivered to work address.",
+      "failure_type": "retry_killed_stale_eval",
+      "failed_asserts": [
+        "assert model changes match amazon.PaymentCard,\\namazon.Order, amazon.OrderItem, amazon.Product, file_system.File, file_system.Directory,\\ngmail.GlobalEmailThread, gmail.Attachment, gmail.Email, gmail.UserEmailThread,\\nignoring amazon.CartEntry and amazon.Address, \"amazon.PaymentCard\".",
+        "assert there is 1 new amazon.Order by models.changed_records.",
+        "assert the new order has 1 quantity of the chosen product."
+      ],
+      "reviewer_fired": true,
+      "reviewer_root_cause": "WRONG ENTITY",
+      "retry_noop": true,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "b119b1f_2",
+      "verdict": "CORRECT",
+      "correct": true,
+      "tests_passed": 6,
+      "tests_total": 6,
+      "seconds": 11.5,
+      "difficulty": 2,
+      "required_apps": [
+        "spotify"
+      ],
+      "instruction": "Keep going to the next song on Spotify until you reach a song by Lily Moon.",
+      "failure_type": null,
+      "failed_asserts": [],
+      "reviewer_fired": false,
+      "reviewer_root_cause": null,
+      "retry_noop": false,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "b3bdcc1_1",
+      "verdict": "WRONG",
+      "correct": false,
+      "tests_passed": 8,
+      "tests_total": 9,
+      "seconds": 44.8,
+      "difficulty": 2,
+      "required_apps": [
+        "amazon",
+        "file_system",
+        "gmail"
+      ],
+      "instruction": "Buy me a air purifier on amazon from its highest-rated seller using my visa card for my home address.",
+      "failure_type": "code_error",
+      "failed_asserts": [
+        "assert the order is from the seller private_data.highest_rated_seller_id."
+      ],
+      "reviewer_fired": true,
+      "reviewer_root_cause": "WRONG FILTER",
+      "retry_noop": true,
+      "premature_strips": 1
+    },
+    {
+      "task_id": "b7a9ee9_3",
+      "verdict": "CORRECT",
+      "correct": true,
+      "tests_passed": 4,
+      "tests_total": 4,
+      "seconds": 29.5,
+      "difficulty": 2,
+      "required_apps": [
+        "spotify"
+      ],
+      "instruction": "Follow all artists of all indie-genre songs in any of my playlists on Spotify.",
+      "failure_type": null,
+      "failed_asserts": [],
+      "reviewer_fired": false,
+      "reviewer_root_cause": null,
+      "retry_noop": false,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "c77c005_3",
+      "verdict": "CORRECT",
+      "correct": true,
+      "tests_passed": 5,
+      "tests_total": 5,
+      "seconds": 64.9,
+      "difficulty": 2,
+      "required_apps": [
+        "venmo"
+      ],
+      "instruction": "Befriend on Venmo anyone I have received money from this month and unfriend everyone else.",
+      "failure_type": null,
+      "failed_asserts": [],
+      "reviewer_fired": false,
+      "reviewer_root_cause": null,
+      "retry_noop": false,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "ccb4494_3",
+      "verdict": "WRONG",
+      "correct": false,
+      "tests_passed": 4,
+      "tests_total": 5,
+      "seconds": 21.6,
+      "difficulty": 2,
+      "required_apps": [
+        "spotify"
+      ],
+      "instruction": "Like all the songs played so far in my spotify music player queue, including the current one.",
+      "failure_type": "retry_killed_stale_eval",
+      "failed_asserts": [
+        "assert song_ids from the added song likes match the private_data.song_ids_to_like (ignore order)."
+      ],
+      "reviewer_fired": true,
+      "reviewer_root_cause": "WRONG FILTER",
+      "retry_noop": true,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "d9987f6_2",
+      "verdict": "WRONG",
+      "correct": false,
+      "tests_passed": 3,
+      "tests_total": 9,
+      "seconds": 52.7,
+      "difficulty": 2,
+      "required_apps": [
+        "amazon",
+        "file_system",
+        "gmail"
+      ],
+      "instruction": "Buy me a gaming console controller on amazon with a rating over 3.8 and have it delivered to my work address.",
+      "failure_type": "retry_killed_stale_eval",
+      "failed_asserts": [
+        "assert model changes match amazon.Order, amazon.Product,\\nignoring amazon.Address, amazon.CartEntry",
+        "assert 1 record has been added to amazon.Order using models.changed_records.",
+        "assert the new order has 1 quantity of a product."
+      ],
+      "reviewer_fired": true,
+      "reviewer_root_cause": "WRONG ENTITY",
+      "retry_noop": true,
+      "premature_strips": 0
+    }
+  ]
+}

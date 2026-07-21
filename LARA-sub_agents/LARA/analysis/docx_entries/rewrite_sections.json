@@ -1,0 +1,51 @@
+{
+  "entries": [
+    {
+      "match": "Specialists Branch (45 tasks)",
+      "qualitative": [
+        "[1] Task breadth — not app identity — predicts failure.",
+        "1-app tasks scored 65% and 2-app 68%, but 3-app collapsed to 11% (1 of 9). Mean task time tracks the same axis (Spotify 26s, Venmo 68s). The per-app rates are therefore mostly a proxy for how many apps each app's tasks span, not a measure of specialist quality. This inverts the study's original hypothesis.",
+        "[2] The Reviewer retry path is structurally dead: 20 fires, 1 rescue.",
+        "This is the largest single failure category — 14 of 20 failures. The diagnoses are accurate and the retry does write a full corrected solution; it is then discarded by a race between two guards. The premature-submit guard strips the retry's complete_task() call, so the new answer is never submitted. evaluate_task() then reads AppWorld's task_completed() flag, which is sticky and still True from attempt 1, and returns attempt 1's wrong verdict. The orchestrator sees completed=True / correct=False and breaks the loop at step 1. One slice recorded zero premature strips yet still lost every retry, confirming the sticky flag is the necessary cause.",
+        "[3] Difficulty inverts at the easy end.",
+        "Pooled, difficulty 1 (62%) underperformed difficulty 2 (77%); difficulty 3 collapsed to 18%. Easy tasks are short single-value lookups, so the Executor reaches a plausible answer in few steps and submits early with a wrong filter or scope. Longer plans force more discovery before submission, which protects medium tasks. One slice logged 13 premature-submit strips across 15 tasks.",
+        "[4] Sandbox timeouts are a multi-app phenomenon.",
+        "All three SIGALRM kills occurred on multi-app tasks and none on single-app ones. Heavier cross-app work pushes the Executor into per-item API loops that exceed the sandbox limit.",
+        "[5] Run-to-run variance is large enough to invalidate single-run comparisons.",
+        "Tasks repeated across slices produced opposite outcomes from identical code — one passed 8/8 in 38s in one run and failed 3/8 in 390s in another. At temperature 0.1 the Executor still samples materially different programs."
+      ],
+      "conclusions": [
+        "Key insight: the study set out to rank the app specialists and found that the specialists are largely not the bottleneck. Two pipeline-level defects — the dead Reviewer retry path and multi-app coordination — account for most failures, and both are app-agnostic.",
+        "[1] Fix the retry path. Highest value, bounded scope: it gates 14 of 20 failures. Make evaluate_task() attempt-scoped by tracking a per-attempt submitted flag, and only break the ReAct loop when the current attempt submitted.",
+        "[2] Target multi-app coordination. 3-app tasks score 11% and are the real capability gap. Inspect whether the per-step dispatch map handles app switching mid-plan.",
+        "[3] Require repeat runs before any A/B claim. Measured variance exceeds the effect size a 15-task single run can resolve.",
+        "[4] Curb premature submission on short plans — the difficulty-1 failure mode.",
+        "[5] Note on scope: Splitwise, Todoist, API-Docs, Amazon, Gmail and File-Explorer were not exercised in this part. See Part 2."
+      ]
+    },
+    {
+      "match": "Part 2 — Amazon / Gmail / Splitwise / Todoist",
+      "qualitative": [
+        "[1] Both new specialists are sound. This is the headline, and it contradicts the raw scores.",
+        "Splitwise scored 1/15 and Todoist 3/15, but every API call each made was audited against its shipped documentation. Splitwise used record_expense, show_groups, search_users, record_payment, attach_expense_receipt_file and accept_group_invitation — all real members of its 65-API surface. Todoist used show_projects, show_tasks, update_task, post_task_comment, delete_task, assign_or_unassign_task and create_task — all real members of its 56-API surface. Zero hallucinated API names in either. Their low scores measure task breadth, not their own correctness.",
+        "[2] Task breadth is the dominant predictor, collapsing monotonically past two apps.",
+        "1-app 58%, 2-app 49%, 3-app 29%, 5-app 0%, 6-app 0%. Nine tasks span five or more apps and none were solved. Splitwise scores 7% because 10 of its 15 tasks span 3+ apps; Spotify scores 67% because 14 of 15 are single-app.",
+        "[3] Amazon is the informative exception — the multi-app ceiling is tractable, not inherent.",
+        "Amazon solved 36% of its 3-app tasks against 11% for phone/venmo, and cleared both a 4-app and an 11-assertion difficulty-3 task outright. On Amazon, difficulty 3 outperformed difficulty 2. So '3-app' is not one uniform class: breadth interacts with which apps combine, and amazon+gmail+file_system coordinates better than phone+venmo+simple_note.",
+        "[4] Partial credit shows the specialists finishing their own portion and failing the work around it.",
+        "The three 6-app tasks each scored exactly 9/24, and the best splitwise attempt reached 9/10. The most frequently failed assertions name other apps, not splitwise or todoist.",
+        "[5] The Reviewer retry path, measured at scale: 58 fires, 1 rescue across 105 tasks.",
+        "retry_killed_stale_eval is 36 of 63 failures (57%) — the largest category in the study. Mechanism unchanged from Part 1."
+      ],
+      "conclusions": [
+        "Key insight: specialist quality is not the bottleneck. The two newest specialists are demonstrably correct at the API level. Two app-agnostic pipeline defects — the dead retry path and multi-app coordination — account for the great majority of failures.",
+        "[1] Fix the retry path. It gates 36 of 63 failures. Make evaluate_task() attempt-scoped via a per-attempt submitted flag. Cheapest, highest-yield fix available.",
+        "[2] Target multi-app coordination. Zero of nine tasks spanning 5+ apps were solved. Amazon's 36% on 3-app tasks indicates this ceiling is tractable.",
+        "[3] Do not judge the Splitwise and Todoist specialists on their 7% and 20% scores. Re-measure after the retry fix, restricted to the <=2-app subset.",
+        "[4] Require repeat runs before trusting any A/B result, given the demonstrated variance.",
+        "[5] Obtain or hand-write api_docs tasks. That specialist has zero tasks in any split and has never been executed.",
+        "Caveat: 15 tasks per app is a small sample. Only the aggregate patterns above are reliable; individual per-task results are not."
+      ]
+    }
+  ]
+}

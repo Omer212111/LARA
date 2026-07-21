@@ -1,0 +1,69 @@
+{
+  "name": "Per-App Capability Study — Specialists Branch (45 tasks)",
+  "date": "20/07/2026",
+  "author": "Omer",
+  "objective": [
+    "Primary Goal: Evaluate the specialists branch (feat/specialists-and-success-rate, commit dfb58c7) across a spread of task types, and identify which kinds of tasks the agents are currently weakest on. This is a diagnostic study, not an A/B — no code was changed.",
+    "Method: 15 tasks per app, sampled at random (seed 20260720) from train+dev. Tasks were selected using GROUND-TRUTH metadata (ground_truth/required_apps.json for app labels, ground_truth/metadata.json for difficulty 1/2/3), not instruction keyword matching. benchmark.find_tasks_by_app() greps instruction text and mislabels tasks that merely mention an app; a new sampler (analysis/sample_tasks.py) uses the ground truth instead. Slices are pinned in slices.json as <app>-random15, so every run is reproducible.",
+    "Hypothesis: per-app success rates would reveal which specialist sub-agents are weakest, pointing at which app agent to improve next.",
+    "Scope limitation discovered before running: the installed AppWorld dataset contains ZERO tasks for splitwise, todoist, amazon, gmail and api_docs. The three specialists added on this branch (Splitwise, Todoist, API-Docs) therefore could not be evaluated at all. test_normal (168 tasks) and test_challenge (417) ship metadata.json but withhold ground_truth/, so they can be neither app-filtered nor scored locally. Testable apps were limited to spotify (78 tasks available), phone (48) and venmo (42)."
+  ],
+  "environment": [
+    "Branch: feat/specialists-and-success-rate, commit dfb58c7 (Gilad). Run in an isolated git worktree so it was unaffected by local uncommitted work.",
+    "Models: Executor / Explorer / Reviewer all gpt-4.1-mini | Temperature=0.1",
+    "Parameters: MAX_ITERATIONS=6 | MAX_EXECUTOR_RUNS=2 | MAX_REACT_STEPS=16",
+    "Scoring: world.evaluate() — the official AppWorld scorer.",
+    "Slices: spotify-random15, phone-random15, venmo-random15 (45 tasks total).",
+    "Artifacts: analysis/CAPABILITY_STUDY_2026-07-20.md, analysis/runs/<slice>.report.md, .results.json, and per-slice HTML run logs."
+  ],
+  "quantitative": [
+    "Overall: 25/45 correct (56%).",
+    {"table": {
+      "headers": ["App", "Correct", "Rate", "Mean time", "d1", "d2", "d3"],
+      "rows": [
+        ["Spotify", "10/15", "67%", "26.3s", "50%", "100%", "100% (n=1)"],
+        ["Phone", "8/15", "53%", "43.0s", "57%", "75%", "25%"],
+        ["Venmo", "7/15", "47%", "68.3s", "100%", "60%", "0%"],
+        ["TOTAL", "25/45", "56%", "", "62%", "77%", "18%"]
+      ]
+    }},
+    "Pooled by task breadth (number of apps a task requires) — the strongest signal in the study:",
+    {"table": {
+      "headers": ["Apps required", "n", "Correct", "Rate"],
+      "rows": [
+        ["1-app", "17", "11", "65%"],
+        ["2-app", "19", "13", "68%"],
+        ["3-app", "9", "1", "11%"]
+      ]
+    }},
+    "Failure categories across all 45 tasks:",
+    {"table": {
+      "headers": ["Category", "Count"],
+      "rows": [
+        ["retry_killed_stale_eval", "14"],
+        ["code_error", "5"],
+        ["sandbox_timeout", "1"]
+      ]
+    }},
+    "Reviewer effectiveness: fired on 20 tasks, rescued 1."
+  ],
+  "qualitative": [
+    "Finding 1 — Task breadth, not app identity, predicts failure. 1-app (65%) and 2-app (68%) tasks perform the same; 3-app tasks collapse to 11% (1 of 9). Mean task time tracks this exactly (Spotify 26s to Venmo 68s), because Spotify tasks are overwhelmingly single-app while venmo tasks are almost never single-app. The per-app rates are therefore largely a PROXY FOR TASK BREADTH, not a measure of specialist quality — Venmo does not score lowest because VenmoExecutor is weak, but because venmo tasks span more apps. This inverts the study's original hypothesis.",
+    "Finding 2 — The Reviewer retry path is structurally broken (20 fires, 1 rescue). This is the single largest failure category: 14 of 20 failures. The Reviewer's diagnoses are ACCURATE and the retry DOES write a full corrected solution — reading the attempt-2 code in the logs confirms it implements the suggested fix and computes a fresh answer. The corrected answer is then discarded by a stale-state race between two guards: (1) the premature-submit guard (base.py:366) sees a long plan and only step 1, so it STRIPS the complete_task() call, meaning the new answer is never submitted; (2) evaluate_task() (base.py:447) then reads env.task_completed() (tools.py:45), which is STICKY — attempt 1 already called complete_task, so AppWorld still reports completed=True carrying attempt 1's wrong verdict; (3) the orchestrator sees completed=True, correct=False and breaks out of the ReAct loop at step 1. Attempt 2 is thus judged on attempt 1's answer and killed before it can submit its own. Note the venmo slice had ZERO premature strips yet still lost all 7 retries — confirming the sticky completion flag, not the strip guard, is the necessary cause.",
+    "Finding 3 — Difficulty inversion at the easy end. Pooled, difficulty 1 (62%) UNDERPERFORMS difficulty 2 (77%); difficulty 3 collapses to 18%. On Spotify every single failure was a difficulty-1 task while all medium and hard tasks passed. Mechanism from the logs: easy tasks are short single-value lookups with short plans, so the Executor reaches a plausible answer in few steps and submits early with a wrong filter or scope. Longer plans force more discovery before submission, protecting medium tasks. Spotify logged 13 premature-submit strips across 15 tasks — the guard is under constant pressure.",
+    "Finding 4 — Sandbox timeouts (SIGALRM) appear only on phone/venmo multi-app tasks (3 occurrences), never on Spotify. Heavier cross-app tasks push the Executor into per-item API loops that get killed.",
+    "Finding 5 — Run-to-run instability is substantial. Three tasks appear in both the phone and venmo slices with DIFFERENT outcomes from identical code: 3c13f5a_1 passed 6/6 in one run and failed 2/6 in the other; 4fab96f_2 passed 8/8 in 38s in one run and failed 3/8 in 390s in the other — 10x slower. At temperature 0.1 the Executor still samples materially different programs."
+  ],
+  "conclusions": [
+    "Key Insight: the study set out to rank the app specialists and instead found that the specialists are largely not the bottleneck. Two pipeline-level defects — the dead Reviewer retry path and 3-app coordination — account for most failures, and both are app-agnostic.",
+    "Action Items, in priority order:",
+    {"bullets": [
+      "Fix the retry path (gates 14 of 20 failures). Make evaluate_task() attempt-scoped instead of reading AppWorld's sticky task_completed(): track a per-attempt 'submitted' flag and only break the ReAct loop when THIS attempt submitted. Alternatively skip the premature-strip guard on retry attempts, where the model is deliberately reproducing the whole solution in one block so 'step 1 of ~10' miscounts its real progress.",
+      "Target 3-app coordination (11% success, 1 of 9). This is the real capability gap. Inspect whether the per-step dispatch map handles app switching mid-plan.",
+      "Require repeat runs before trusting any A/B result. Measured variance is large enough that a single 15-task run cannot distinguish a real 10-point gain from noise.",
+      "Curb premature submission on short plans — the difficulty-1 failure mode.",
+      "To evaluate the new Splitwise / Todoist / API-Docs specialists at all, obtain AppWorld task data covering those apps or hand-write tasks; the current dataset cannot exercise them."
+    ]},
+    "Caveat: this study says nothing about the correctness of the Splitwise, Todoist, API-Docs, Amazon, Gmail or File-Explorer specialists — they were never exercised."
+  ]
+}

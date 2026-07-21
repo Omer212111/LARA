@@ -1,19 +1,32 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-07-18",
+  "last_updated": "2026-07-20",
   "notes": "Pinned benchmark slices for LARA. A 'slice' is a named, reproducible set of task IDs + parameters. The autonomous loop references slices by name so that runs from different sessions are directly comparable; raw 'benchmark.py --app venmo --n 5' is not stable because the underlying keyword filter can drift. Update task_ids only when you deliberately want to expand or reshape a slice (record why in 'change_log'). NOTE: the per-app slices below (splitwise-8, todoist-8) ship with empty task_ids because the AppWorld task payloads (data/tasks/*/specs.json) are not installed in every environment. Populate them once, from the LARA dir with the appworld data present, via:  python -c \"from benchmark import find_tasks_by_app; print(find_tasks_by_app('splitwise'))\"  and paste the first N IDs.",
   "slices": {
     "broad-20": {
-      "purpose": "Primary north-star A/B slice. The first 20 train tasks (identical to `benchmark.py --n 20 --dataset train`) — a mixed, positionally-stable sample across apps. Use this to track progress toward the 50% goal (~10/20 correct). Larger than the 5-task smoke slice so model/prompt A/Bs are less positionally noisy.",
+      "purpose": "Primary north-star A/B slice. The first 20 train tasks (identical to `benchmark.py --n 20 --dataset train`) \u2014 a mixed, positionally-stable sample across apps. Use this to track progress toward the 50% goal (~10/20 correct). Larger than the 5-task smoke slice so model/prompt A/Bs are less positionally noisy.",
       "dataset": "train",
       "task_ids": [
-        "82e2fac_1", "82e2fac_2", "82e2fac_3",
-        "692c77d_1", "692c77d_2", "692c77d_3",
-        "2a163ab_1", "2a163ab_2", "2a163ab_3",
-        "6104387_1", "6104387_2", "6104387_3",
-        "29caf6f_1", "29caf6f_2", "29caf6f_3",
-        "afc0fce_1", "afc0fce_2", "afc0fce_3",
-        "287e338_1", "287e338_2"
+        "82e2fac_1",
+        "82e2fac_2",
+        "82e2fac_3",
+        "692c77d_1",
+        "692c77d_2",
+        "692c77d_3",
+        "2a163ab_1",
+        "2a163ab_2",
+        "2a163ab_3",
+        "6104387_1",
+        "6104387_2",
+        "6104387_3",
+        "29caf6f_1",
+        "29caf6f_2",
+        "29caf6f_3",
+        "afc0fce_1",
+        "afc0fce_2",
+        "afc0fce_3",
+        "287e338_1",
+        "287e338_2"
       ],
       "params": {
         "max_iterations": 6,
@@ -22,9 +35,15 @@
         "executor_model": "gpt-4.1-mini",
         "explorer_model": "gpt-4.1-mini"
       },
-      "expected_runtime_s_range": [600, 1800],
+      "expected_runtime_s_range": [
+        600,
+        1800
+      ],
       "change_log": [
-        {"date": "2026-07-18", "note": "Initial pin. First 20 train IDs — same set as the benchmark.py default, so parsed panel is directly comparable to the official scorer."}
+        {
+          "date": "2026-07-18",
+          "note": "Initial pin. First 20 train IDs \u2014 same set as the benchmark.py default, so parsed panel is directly comparable to the official scorer."
+        }
       ]
     },
     "venmo-smoke-5": {
@@ -44,11 +63,20 @@
         "executor_model": "gpt-4.1-mini",
         "explorer_model": "gpt-4.1-mini"
       },
-      "expected_runtime_s_range": [60, 180],
+      "expected_runtime_s_range": [
+        60,
+        180
+      ],
       "created_in_run": "ba1uv9gmu",
       "change_log": [
-        {"date": "2026-05-22", "note": "Initial pin. Same 5 IDs used across runs ba1uv9gmu / bg22f2uo7 / bv1ew2sc3."},
-        {"date": "2026-07-18", "note": "params updated to gpt-4.1-mini + max_iterations=6 to match the new config.py defaults (params are documentation-only; the runtime reads config.py)."}
+        {
+          "date": "2026-05-22",
+          "note": "Initial pin. Same 5 IDs used across runs ba1uv9gmu / bg22f2uo7 / bv1ew2sc3."
+        },
+        {
+          "date": "2026-07-18",
+          "note": "params updated to gpt-4.1-mini + max_iterations=6 to match the new config.py defaults (params are documentation-only; the runtime reads config.py)."
+        }
       ]
     },
     "splitwise-8": {
@@ -63,7 +91,10 @@
         "explorer_model": "gpt-4.1-mini"
       },
       "change_log": [
-        {"date": "2026-07-18", "note": "Scaffolded empty. Populate via find_tasks_by_app('splitwise') once the AppWorld task data is installed (see top-level notes)."}
+        {
+          "date": "2026-07-18",
+          "note": "Scaffolded empty. Populate via find_tasks_by_app('splitwise') once the AppWorld task data is installed (see top-level notes)."
+        }
       ]
     },
     "todoist-8": {
@@ -78,7 +109,479 @@
         "explorer_model": "gpt-4.1-mini"
       },
       "change_log": [
-        {"date": "2026-07-18", "note": "Scaffolded empty. Populate via find_tasks_by_app('todoist') once the AppWorld task data is installed (see top-level notes)."}
+        {
+          "date": "2026-07-18",
+          "note": "Scaffolded empty. Populate via find_tasks_by_app('todoist') once the AppWorld task data is installed (see top-level notes)."
+        }
+      ]
+    },
+    "spotify-random15": {
+      "purpose": "Per-app capability probe for spotify. 15 tasks sampled at random (seed=20260720) from train+dev using ground-truth required_apps.json \u2014 not instruction keyword matching. Includes multi-app tasks, i.e. the realistic setting in which the spotify agent is used.",
+      "dataset": "train+dev",
+      "task_ids": [
+        "287e338_1",
+        "287e338_2",
+        "396c5a2_1",
+        "4ec8de5_1",
+        "4ec8de5_2",
+        "57c3486_3",
+        "6bdbc26_2",
+        "82e2fac_1",
+        "82e2fac_2",
+        "aa8502b_1",
+        "aa8502b_3",
+        "b0a8eae_1",
+        "b119b1f_3",
+        "ce359b5_1",
+        "e85d92a_2"
+      ],
+      "params": {
+        "max_iterations": 6,
+        "max_executor_runs": 2,
+        "temperature": 0.1,
+        "executor_model": "gpt-4.1-mini",
+        "explorer_model": "gpt-4.1-mini",
+        "reviewer_model": "gpt-4.1-mini"
+      },
+      "sampling": {
+        "method": "ground_truth_required_apps",
+        "seed": 20260720,
+        "splits": [
+          "train",
+          "dev"
+        ],
+        "solo_only": false
+      },
+      "change_log": [
+        {
+          "date": "2026-07-20",
+          "note": "Created for the per-app capability study on branch feat/specialists-and-success-rate."
+        }
+      ]
+    },
+    "phone-random15": {
+      "purpose": "Per-app capability probe for phone. 15 tasks sampled at random (seed=20260720) from train+dev using ground-truth required_apps.json \u2014 not instruction keyword matching. Includes multi-app tasks, i.e. the realistic setting in which the phone agent is used.",
+      "dataset": "train+dev",
+      "task_ids": [
+        "22cc237_2",
+        "22cc237_3",
+        "29caf6f_1",
+        "2a163ab_1",
+        "302c169_2",
+        "383cbac_1",
+        "383cbac_2",
+        "383cbac_3",
+        "3c13f5a_1",
+        "3c13f5a_2",
+        "4fab96f_2",
+        "60d0b5b_1",
+        "771d8fc_2",
+        "df61dc5_2",
+        "df61dc5_3"
+      ],
+      "params": {
+        "max_iterations": 6,
+        "max_executor_runs": 2,
+        "temperature": 0.1,
+        "executor_model": "gpt-4.1-mini",
+        "explorer_model": "gpt-4.1-mini",
+        "reviewer_model": "gpt-4.1-mini"
+      },
+      "sampling": {
+        "method": "ground_truth_required_apps",
+        "seed": 20260720,
+        "splits": [
+          "train",
+          "dev"
+        ],
+        "solo_only": false
+      },
+      "change_log": [
+        {
+          "date": "2026-07-20",
+          "note": "Created for the per-app capability study on branch feat/specialists-and-success-rate."
+        }
+      ]
+    },
+    "venmo-random15": {
+      "purpose": "Per-app capability probe for venmo. 15 tasks sampled at random (seed=20260720) from train+dev using ground-truth required_apps.json \u2014 not instruction keyword matching. Includes multi-app tasks, i.e. the realistic setting in which the venmo agent is used.",
+      "dataset": "train+dev",
+      "task_ids": [
+        "0d8a4ee_3",
+        "22cc237_2",
+        "22cc237_3",
+        "23cf851_1",
+        "2a163ab_1",
+        "2a163ab_2",
+        "37a8675_2",
+        "3c13f5a_1",
+        "3c13f5a_2",
+        "3c13f5a_3",
+        "4fab96f_2",
+        "530b157_2",
+        "6ea6792_1",
+        "df61dc5_2",
+        "df61dc5_3"
+      ],
+      "params": {
+        "max_iterations": 6,
+        "max_executor_runs": 2,
+        "temperature": 0.1,
+        "executor_model": "gpt-4.1-mini",
+        "explorer_model": "gpt-4.1-mini",
+        "reviewer_model": "gpt-4.1-mini"
+      },
+      "sampling": {
+        "method": "ground_truth_required_apps",
+        "seed": 20260720,
+        "splits": [
+          "train",
+          "dev"
+        ],
+        "solo_only": false
+      },
+      "change_log": [
+        {
+          "date": "2026-07-20",
+          "note": "Created for the per-app capability study on branch feat/specialists-and-success-rate."
+        }
+      ]
+    },
+    "amazon-random15": {
+      "purpose": "Per-app capability probe for amazon. 15 tasks sampled at random (seed=20260720) from all four splits. Labels come from ground_truth/required_apps.json where shipped (train/dev) and from sample_tasks.infer_apps() otherwise (test_*), which reads evaluation.py's asserted models + instruction text. This slice: 6/15 difficulty-3, 12/15 span >=3 apps.",
+      "dataset": "all-splits",
+      "task_ids": [
+        "1c4bd27_1",
+        "2e9b91e_1",
+        "4242c97_1",
+        "6474048_3",
+        "6588a51_3",
+        "66b7899_3",
+        "7434096_1",
+        "7434096_3",
+        "7e1be84_2",
+        "9b2dc64_2",
+        "b6d1f70_3",
+        "dc5c5c6_2",
+        "e201314_3",
+        "efc3cea_1",
+        "fdc4b74_2"
+      ],
+      "params": {
+        "max_iterations": 6,
+        "max_executor_runs": 2,
+        "temperature": 0.1,
+        "executor_model": "gpt-4.1-mini",
+        "explorer_model": "gpt-4.1-mini",
+        "reviewer_model": "gpt-4.1-mini"
+      },
+      "sampling": {
+        "method": "required_apps_or_inferred",
+        "seed": 20260720,
+        "splits": [
+          "train",
+          "dev",
+          "test_normal",
+          "test_challenge"
+        ],
+        "solo_only": false
+      },
+      "change_log": [
+        {
+          "date": "2026-07-20",
+          "note": "Created after establishing test_* splits ARE locally scorable (evaluation.py shipped); only required_apps.json/solution.py are withheld."
+        }
+      ]
+    },
+    "gmail-random15": {
+      "purpose": "Per-app capability probe for gmail. 15 tasks sampled at random (seed=20260720) from all four splits. Labels come from ground_truth/required_apps.json where shipped (train/dev) and from sample_tasks.infer_apps() otherwise (test_*), which reads evaluation.py's asserted models + instruction text. This slice: 5/15 difficulty-3, 8/15 span >=3 apps.",
+      "dataset": "all-splits",
+      "task_ids": [
+        "245cb43_2",
+        "277d81d_2",
+        "30e8586_1",
+        "4441ee9_2",
+        "4815c06_3",
+        "6a5e690_3",
+        "8d42650_2",
+        "9016950_1",
+        "9126bf0_1",
+        "96bf160_3",
+        "988af8e_3",
+        "998908e_1",
+        "a3ba388_2",
+        "b3bdcc1_3",
+        "e0fe09c_1"
+      ],
+      "params": {
+        "max_iterations": 6,
+        "max_executor_runs": 2,
+        "temperature": 0.1,
+        "executor_model": "gpt-4.1-mini",
+        "explorer_model": "gpt-4.1-mini",
+        "reviewer_model": "gpt-4.1-mini"
+      },
+      "sampling": {
+        "method": "required_apps_or_inferred",
+        "seed": 20260720,
+        "splits": [
+          "train",
+          "dev",
+          "test_normal",
+          "test_challenge"
+        ],
+        "solo_only": false
+      },
+      "change_log": [
+        {
+          "date": "2026-07-20",
+          "note": "Created after establishing test_* splits ARE locally scorable (evaluation.py shipped); only required_apps.json/solution.py are withheld."
+        }
+      ]
+    },
+    "splitwise-random15": {
+      "purpose": "Per-app capability probe for splitwise. 15 tasks sampled at random (seed=20260720) from all four splits. Labels come from ground_truth/required_apps.json where shipped (train/dev) and from sample_tasks.infer_apps() otherwise (test_*), which reads evaluation.py's asserted models + instruction text. This slice: 12/15 difficulty-3, 10/15 span >=3 apps.",
+      "dataset": "all-splits",
+      "task_ids": [
+        "32616b5_2",
+        "32616b5_3",
+        "3aa1a22_1",
+        "3aa1a22_2",
+        "3aa1a22_3",
+        "6b6ca61_2",
+        "6b6ca61_3",
+        "83a7951_1",
+        "83a7951_3",
+        "8d42650_1",
+        "8d42650_3",
+        "988af8e_1",
+        "988af8e_2",
+        "988af8e_3",
+        "fb05fed_2"
+      ],
+      "params": {
+        "max_iterations": 6,
+        "max_executor_runs": 2,
+        "temperature": 0.1,
+        "executor_model": "gpt-4.1-mini",
+        "explorer_model": "gpt-4.1-mini",
+        "reviewer_model": "gpt-4.1-mini"
+      },
+      "sampling": {
+        "method": "required_apps_or_inferred",
+        "seed": 20260720,
+        "splits": [
+          "train",
+          "dev",
+          "test_normal",
+          "test_challenge"
+        ],
+        "solo_only": false
+      },
+      "change_log": [
+        {
+          "date": "2026-07-20",
+          "note": "Created after establishing test_* splits ARE locally scorable (evaluation.py shipped); only required_apps.json/solution.py are withheld."
+        }
+      ]
+    },
+    "todoist-random15": {
+      "purpose": "Per-app capability probe for todoist. 15 tasks sampled at random (seed=20260720) from all four splits. Labels come from ground_truth/required_apps.json where shipped (train/dev) and from sample_tasks.infer_apps() otherwise (test_*), which reads evaluation.py's asserted models + instruction text. This slice: 15/15 difficulty-3, 7/15 span >=3 apps.",
+      "dataset": "all-splits",
+      "task_ids": [
+        "4441ee9_1",
+        "4441ee9_2",
+        "8ce6779_1",
+        "8ce6779_2",
+        "8ce6779_3",
+        "986aa4e_1",
+        "986aa4e_2",
+        "986aa4e_3",
+        "988af8e_1",
+        "988af8e_3",
+        "bde252e_1",
+        "bde252e_3",
+        "fdc4b74_1",
+        "fdc4b74_2",
+        "fdc4b74_3"
+      ],
+      "params": {
+        "max_iterations": 6,
+        "max_executor_runs": 2,
+        "temperature": 0.1,
+        "executor_model": "gpt-4.1-mini",
+        "explorer_model": "gpt-4.1-mini",
+        "reviewer_model": "gpt-4.1-mini"
+      },
+      "sampling": {
+        "method": "required_apps_or_inferred",
+        "seed": 20260720,
+        "splits": [
+          "train",
+          "dev",
+          "test_normal",
+          "test_challenge"
+        ],
+        "solo_only": false
+      },
+      "change_log": [
+        {
+          "date": "2026-07-20",
+          "note": "Created after establishing test_* splits ARE locally scorable (evaluation.py shipped); only required_apps.json/solution.py are withheld."
+        }
+      ]
+    },
+    "difficulty1-single-20": {
+      "purpose": "Controlled difficulty probe, level 1 (easy). 20 tasks sampled at random (seed=20260720) from ALL splits, restricted to ground-truth num_apps==1. Holding app-count constant separates task COMPLEXITY (solution length, API-call volume) from the multi-app COORDINATION gap that dominates the unrestricted difficulty signal. Compare across the three difficulty*-single-20 slices.",
+      "dataset": "all-splits",
+      "task_ids": [
+        "07b42fd_2",
+        "166f4ff_1",
+        "21abae1_1",
+        "23cf851_1",
+        "27e1026_2",
+        "287e338_1",
+        "287e338_3",
+        "365e0a3_3",
+        "4d12842_3",
+        "57c3486_1",
+        "59fae45_1",
+        "5a83b05_1",
+        "5e27cd7_2",
+        "6588a51_2",
+        "68ee2c9_1",
+        "6a5e690_3",
+        "771d8fc_3",
+        "a30375d_2",
+        "dac78d9_2",
+        "e7a10f8_2"
+      ],
+      "params": {
+        "max_iterations": 6,
+        "max_executor_runs": 2,
+        "temperature": 0.1,
+        "executor_model": "gpt-4.1-mini",
+        "explorer_model": "gpt-4.1-mini",
+        "reviewer_model": "gpt-4.1-mini"
+      },
+      "sampling": {
+        "method": "metadata_difficulty_single_app",
+        "seed": 20260720,
+        "splits": [
+          "train",
+          "dev",
+          "test_normal",
+          "test_challenge"
+        ],
+        "num_apps": 1
+      },
+      "change_log": [
+        {
+          "date": "2026-07-20",
+          "note": "Created for the controlled 'what makes a task hard' study."
+        }
+      ]
+    },
+    "difficulty2-single-20": {
+      "purpose": "Controlled difficulty probe, level 2 (medium). 20 tasks sampled at random (seed=20260720) from ALL splits, restricted to ground-truth num_apps==1. Holding app-count constant separates task COMPLEXITY (solution length, API-call volume) from the multi-app COORDINATION gap that dominates the unrestricted difficulty signal. Compare across the three difficulty*-single-20 slices.",
+      "dataset": "all-splits",
+      "task_ids": [
+        "09ac073_2",
+        "4242c97_1",
+        "476b213_1",
+        "4815c06_1",
+        "6171bbc_2",
+        "6474048_1",
+        "6474048_3",
+        "77bcb81_3",
+        "953b296_3",
+        "9b2dc64_1",
+        "a8f302f_1",
+        "aa8502b_1",
+        "af84964_1",
+        "b0934aa_2",
+        "b119b1f_2",
+        "b3bdcc1_1",
+        "b7a9ee9_3",
+        "c77c005_3",
+        "ccb4494_3",
+        "d9987f6_2"
+      ],
+      "params": {
+        "max_iterations": 6,
+        "max_executor_runs": 2,
+        "temperature": 0.1,
+        "executor_model": "gpt-4.1-mini",
+        "explorer_model": "gpt-4.1-mini",
+        "reviewer_model": "gpt-4.1-mini"
+      },
+      "sampling": {
+        "method": "metadata_difficulty_single_app",
+        "seed": 20260720,
+        "splits": [
+          "train",
+          "dev",
+          "test_normal",
+          "test_challenge"
+        ],
+        "num_apps": 1
+      },
+      "change_log": [
+        {
+          "date": "2026-07-20",
+          "note": "Created for the controlled 'what makes a task hard' study."
+        }
+      ]
+    },
+    "difficulty3-single-20": {
+      "purpose": "Controlled difficulty probe, level 3 (hard). 20 tasks sampled at random (seed=20260720) from ALL splits, restricted to ground-truth num_apps==1. Holding app-count constant separates task COMPLEXITY (solution length, API-call volume) from the multi-app COORDINATION gap that dominates the unrestricted difficulty signal. Compare across the three difficulty*-single-20 slices.",
+      "dataset": "all-splits",
+      "task_ids": [
+        "0a9d82a_1",
+        "0a9d82a_2",
+        "0a9d82a_3",
+        "0de03ea_1",
+        "0de03ea_2",
+        "0de03ea_3",
+        "23d431c_3",
+        "34d9492_1",
+        "34d9492_2",
+        "34d9492_3",
+        "69ba40f_1",
+        "69ba40f_3",
+        "7264edc_1",
+        "7264edc_2",
+        "ec437da_1",
+        "ec437da_2",
+        "ec437da_3",
+        "f99d726_1",
+        "f99d726_2",
+        "f99d726_3"
+      ],
+      "params": {
+        "max_iterations": 6,
+        "max_executor_runs": 2,
+        "temperature": 0.1,
+        "executor_model": "gpt-4.1-mini",
+        "explorer_model": "gpt-4.1-mini",
+        "reviewer_model": "gpt-4.1-mini"
+      },
+      "sampling": {
+        "method": "metadata_difficulty_single_app",
+        "seed": 20260720,
+        "splits": [
+          "train",
+          "dev",
+          "test_normal",
+          "test_challenge"
+        ],
+        "num_apps": 1
+      },
+      "change_log": [
+        {
+          "date": "2026-07-20",
+          "note": "Created for the controlled 'what makes a task hard' study."
+        }
       ]
     }
   }

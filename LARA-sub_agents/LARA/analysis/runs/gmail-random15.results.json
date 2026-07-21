@@ -1,0 +1,409 @@
+{
+  "slice": "gmail-random15",
+  "generated_at": "2026-07-20T16:56:05",
+  "log": "analysis/runs/gmail-random15.log",
+  "aggregate": {
+    "reviewer": {
+      "fired": 7,
+      "rescued": 0,
+      "retry_killed": 7,
+      "root_causes": {
+        "WRONG FILTER": 3,
+        "WRONG FORMAT": 2,
+        "ENVIRONMENT_ERROR": 1,
+        "WRONG ENTITY": 1
+      }
+    },
+    "premature_strips": 1,
+    "n_tasks": 15,
+    "n_correct": 6,
+    "success_rate": 0.4,
+    "by_difficulty": {
+      "1": {
+        "n": 3,
+        "correct": 1,
+        "rate": 0.333
+      },
+      "2": {
+        "n": 7,
+        "correct": 4,
+        "rate": 0.571
+      },
+      "3": {
+        "n": 5,
+        "correct": 1,
+        "rate": 0.2
+      }
+    },
+    "by_app_count": {
+      "3-app": {
+        "n": 5,
+        "correct": 2,
+        "rate": 0.4
+      },
+      "1-app": {
+        "n": 3,
+        "correct": 1,
+        "rate": 0.333
+      },
+      "2-app": {
+        "n": 4,
+        "correct": 2,
+        "rate": 0.5
+      },
+      "4-app": {
+        "n": 2,
+        "correct": 1,
+        "rate": 0.5
+      },
+      "6-app": {
+        "n": 1,
+        "correct": 0,
+        "rate": 0.0
+      }
+    },
+    "failure_types": {
+      "retry_killed_stale_eval": 4,
+      "code_error": 3,
+      "sandbox_timeout": 1,
+      "no_submit": 1
+    },
+    "mean_seconds": 45.1
+  },
+  "records": [
+    {
+      "task_id": "245cb43_2",
+      "verdict": "WRONG",
+      "correct": false,
+      "tests_passed": 7,
+      "tests_total": 8,
+      "seconds": 91.4,
+      "difficulty": 1,
+      "required_apps": [
+        "amazon",
+        "file_system",
+        "gmail"
+      ],
+      "instruction": "Buy me a cutting board from my amazon wishlist that will fit in my kitchen drawer of 12.0X9.6 (LxW) inches.",
+      "failure_type": "sandbox_timeout",
+      "failed_asserts": [
+        "assert model changes match amazon.OrderItem, amazon.Order, amazon.Product,\\ngmail.GlobalEmailThread, gmail.Attachment, gmail.Email, gmail.UserEmailThread,\\nfile_system.File, file_system.Directory, ignoring amazon.CartEntry, amazon.Address"
+      ],
+      "reviewer_fired": true,
+      "reviewer_root_cause": "ENVIRONMENT_ERROR",
+      "retry_noop": true,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "277d81d_2",
+      "verdict": "CORRECT",
+      "correct": true,
+      "tests_passed": 6,
+      "tests_total": 6,
+      "seconds": 85.1,
+      "difficulty": 1,
+      "required_apps": [
+        "gmail"
+      ],
+      "instruction": "Mark everything in my Gmail inbox and outbox in the current calendar month as unread.",
+      "failure_type": null,
+      "failed_asserts": [],
+      "reviewer_fired": false,
+      "reviewer_root_cause": null,
+      "retry_noop": false,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "30e8586_1",
+      "verdict": "WRONG",
+      "correct": false,
+      "tests_passed": 4,
+      "tests_total": 10,
+      "seconds": null,
+      "difficulty": 2,
+      "required_apps": [
+        "amazon",
+        "file_system",
+        "gmail"
+      ],
+      "instruction": "Buy the highest rated popcorn maker available on Amazon now, one for each of my following friends, Grant , Jose , Brenda , Nicholas. They have to be gift wrapped and delivered to their respective home addresses. If the total delivery fee is higher than the monthly prime subscription cost, subscribe me to prime first.",
+      "failure_type": "code_error",
+      "failed_asserts": [],
+      "reviewer_fired": false,
+      "reviewer_root_cause": null,
+      "retry_noop": false,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "4441ee9_2",
+      "verdict": "WRONG",
+      "correct": false,
+      "tests_passed": 9,
+      "tests_total": 11,
+      "seconds": 68.1,
+      "difficulty": 3,
+      "required_apps": [
+        "gmail",
+        "todoist"
+      ],
+      "instruction": "My manager assigns me tasks at the beginning of every week with a subject starting with \"To Do\". At the end of each week, I reply to them \"Completed.\" or \"Not Completed.\". For this week, I have starred the emails/tasks which I finished working on, and left the others unstarred. I am closing off this week now, please reply accordingly, and unstar those threads. I may have non-todo emails starred, please keep them as is.",
+      "failure_type": "retry_killed_stale_eval",
+      "failed_asserts": [
+        "set updated_user_email_threads to be ones that belong to main_user (gmail user id),\\nassert all of the updated user_email_threads IDs are in\\nprivate_data.done_user_email_thread_ids + private_data.not_done_user_email_thread_ids.",
+        "obtain added gmail.Email records using models.changed_records,\\nand assert their .response_to_email_id match exactly to\\nprivate_data.done_email_ids + private_data.not_done_email_ids (ignoring order)."
+      ],
+      "reviewer_fired": true,
+      "reviewer_root_cause": "WRONG FILTER",
+      "retry_noop": true,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "4815c06_3",
+      "verdict": "CORRECT",
+      "correct": true,
+      "tests_passed": 9,
+      "tests_total": 9,
+      "seconds": 56.0,
+      "difficulty": 2,
+      "required_apps": [
+        "amazon",
+        "file_system",
+        "gmail"
+      ],
+      "instruction": "Place an amazon order for 1 quantity of 'Ascend Ultralight Hammock', 3 quantity of 'The Complete Mediterranean Cookbook' and 3 quantity of 'Athleta Studio Wrap', and have it delivered to my home. Use HSBC payment card if it's already in my account, otherwise use what I have in it. Also, I have important things in my cart, so revert its state to as it is now after the order.",
+      "failure_type": null,
+      "failed_asserts": [],
+      "reviewer_fired": false,
+      "reviewer_root_cause": null,
+      "retry_noop": false,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "8d42650_2",
+      "verdict": "WRONG",
+      "correct": false,
+      "tests_passed": 4,
+      "tests_total": 10,
+      "seconds": 41.6,
+      "difficulty": 3,
+      "required_apps": [
+        "file_system",
+        "gmail",
+        "simple_note",
+        "splitwise"
+      ],
+      "instruction": "I get monthly internet bill via email on the 1st of every month for the previous month's usage. I pay for it but its total cost is to be shared equally with my roommates and me. In our Splitwise group, create an expense for each month with a note \"internet | MM/YYYY\" and the associated total cost (including my share). The MM/YYYY refers to the month and year the bill usage is for. Do it only for bills for this year's internet usage.",
+      "failure_type": "retry_killed_stale_eval",
+      "failed_asserts": [
+        "assert model changes match splitwise.Expense, splitwise.ExpenseShare, splitwise.Notification,\\nignoring file_system.Directory, file_system.File.",
+        "assert all added expenses have group_id matching private_data.group_id.",
+        "assert all added expenses have payer_id of private_data.splitwise_user_id."
+      ],
+      "reviewer_fired": true,
+      "reviewer_root_cause": "WRONG FILTER",
+      "retry_noop": true,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "9016950_1",
+      "verdict": "CORRECT",
+      "correct": true,
+      "tests_passed": 7,
+      "tests_total": 7,
+      "seconds": 54.5,
+      "difficulty": 3,
+      "required_apps": [
+        "gmail",
+        "phone",
+        "venmo"
+      ],
+      "instruction": "I need my parents to have a venmo account. Last time I checked none had one. Make an account for whoever that does not have it yet, using their email address and A}2Gm4r as password. Then send them a phone text message, \"I have created a venmo account for you. Please activate it, you should have received an email for it. I've set your password to be A}2Gm4r. Change it soon too.\".",
+      "failure_type": null,
+      "failed_asserts": [],
+      "reviewer_fired": false,
+      "reviewer_root_cause": null,
+      "retry_noop": false,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "9126bf0_1",
+      "verdict": "CORRECT",
+      "correct": true,
+      "tests_passed": 7,
+      "tests_total": 7,
+      "seconds": 43.3,
+      "difficulty": 2,
+      "required_apps": [
+        "gmail",
+        "phone"
+      ],
+      "instruction": "Our weekly standup time has changed. Update my phone alarm as per my manager's email about it. I want it to ring 5 minutes before the meeting.",
+      "failure_type": null,
+      "failed_asserts": [],
+      "reviewer_fired": false,
+      "reviewer_root_cause": null,
+      "retry_noop": false,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "96bf160_3",
+      "verdict": "WRONG",
+      "correct": false,
+      "tests_passed": 4,
+      "tests_total": 8,
+      "seconds": 52.1,
+      "difficulty": 2,
+      "required_apps": [
+        "gmail"
+      ],
+      "instruction": "My roommate sent me \"cable_bill.pdf\" on Gmail sometime ago. Please find it and forward that email to the rest of my roommates in a single email.",
+      "failure_type": "retry_killed_stale_eval",
+      "failed_asserts": [
+        "assert the added email's recipient_ids match private_data.other_roommates_gmail_user_ids.",
+        "assert the added email's response_to_email_id is private_data.bill_email_id.",
+        "assert the added email's subject is private_data.expected_subject."
+      ],
+      "reviewer_fired": true,
+      "reviewer_root_cause": "WRONG ENTITY",
+      "retry_noop": true,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "988af8e_3",
+      "verdict": "WRONG",
+      "correct": false,
+      "tests_passed": 8,
+      "tests_total": 24,
+      "seconds": 45.8,
+      "difficulty": 3,
+      "required_apps": [
+        "amazon",
+        "file_system",
+        "gmail",
+        "splitwise",
+        "todoist",
+        "venmo"
+      ],
+      "instruction": "I am going on a camping trip with some of my friends. I have created a new Todoist project for managing its tasks. Please do them for me, and mark them all complete.",
+      "failure_type": "code_error",
+      "failed_asserts": [
+        "assert model changes match todoist.Task, amazon.Order,\\nsplitwise.Group, splitwise.Expense, venmo.PaymentRequest\\ngmail.GlobalEmailThread, gmail.UserEmailThread, gmail.Email, gmail.Attachment,\\nignoring todoist.SubTask, file_system.Directory, amazon.CartEntry, amazon.Address, file_system.File",
+        "assert the updated task_ids match private_data.task_ids (ignoring order).",
+        "obtain added amazon.Order records using models.changed_records, and assert 1 is added."
+      ],
+      "reviewer_fired": true,
+      "reviewer_root_cause": "WRONG FORMAT",
+      "retry_noop": true,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "998908e_1",
+      "verdict": "WRONG",
+      "correct": false,
+      "tests_passed": 2,
+      "tests_total": 5,
+      "seconds": null,
+      "difficulty": 3,
+      "required_apps": [
+        "file_system",
+        "gmail"
+      ],
+      "instruction": "I booked a few hotel rooms today for my upcoming trip. How much did I spend in total from my MasterCard card based on the email confirmations?",
+      "failure_type": "retry_killed_stale_eval",
+      "failed_asserts": [
+        "assert answers match.",
+        "assert model changes match gmail.Attachment, ignoring file_system.File, file_system.Directory."
+      ],
+      "reviewer_fired": true,
+      "reviewer_root_cause": "WRONG FILTER",
+      "retry_noop": true,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "a3ba388_2",
+      "verdict": "CORRECT",
+      "correct": true,
+      "tests_passed": 9,
+      "tests_total": 9,
+      "seconds": 33.8,
+      "difficulty": 2,
+      "required_apps": [
+        "file_system",
+        "gmail"
+      ],
+      "instruction": "I have drafted my resignation email on Gmail. Attach \"~/documents/work/resignation_letter.pdf\" from my file system to it and schedule it to be sent to my manager on next to next Tuesday at 10 am.",
+      "failure_type": null,
+      "failed_asserts": [],
+      "reviewer_fired": false,
+      "reviewer_root_cause": null,
+      "retry_noop": false,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "b3bdcc1_3",
+      "verdict": "WRONG",
+      "correct": false,
+      "tests_passed": 2,
+      "tests_total": 9,
+      "seconds": 46.8,
+      "difficulty": 2,
+      "required_apps": [
+        "amazon",
+        "file_system",
+        "gmail"
+      ],
+      "instruction": "Buy me a portable air conditioner on amazon from its highest-rated seller using my chase card for my home address.",
+      "failure_type": "code_error",
+      "failed_asserts": [
+        "assert model changes match\\namazon.Product, amazon.Order, amazon.OrderItem,\\ngmail.UserEmailThread, gmail.GlobalEmailThread, gmail.Email,\\ngmail.Attachment, file_system.Directory, file_system.File,\\nignoring amazon.CartEntry, amazon.Address.",
+        "assert there is 1 new amazon.Order.",
+        "assert this new order has only 1 product and 1 quantity of that product."
+      ],
+      "reviewer_fired": true,
+      "reviewer_root_cause": "WRONG FORMAT",
+      "retry_noop": true,
+      "premature_strips": 1
+    },
+    {
+      "task_id": "e0fe09c_1",
+      "verdict": "CORRECT",
+      "correct": true,
+      "tests_passed": 9,
+      "tests_total": 9,
+      "seconds": 32.9,
+      "difficulty": 2,
+      "required_apps": [
+        "amazon",
+        "gmail",
+        "spotify",
+        "venmo"
+      ],
+      "instruction": "Label all email threads in my Gmail inbox from notifications@<app>.com with the label of the respective app. Ignore spam and archived ones.",
+      "failure_type": null,
+      "failed_asserts": [],
+      "reviewer_fired": false,
+      "reviewer_root_cause": null,
+      "retry_noop": false,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "6a5e690_3",
+      "verdict": "NOT_CALLED",
+      "correct": false,
+      "tests_passed": null,
+      "tests_total": null,
+      "seconds": 25.0,
+      "difficulty": 1,
+      "required_apps": [
+        "gmail"
+      ],
+      "instruction": "Send all my future-scheduled emails on Gmail right away.",
+      "failure_type": "no_submit",
+      "failed_asserts": [],
+      "reviewer_fired": false,
+      "reviewer_root_cause": null,
+      "retry_noop": false,
+      "premature_strips": 0
+    }
+  ]
+}

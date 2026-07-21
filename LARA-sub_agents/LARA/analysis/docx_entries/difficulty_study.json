@@ -1,0 +1,73 @@
+{
+  "name": "Capability Study, Part 3 — What Makes a Task Difficult (controlled, 60 tasks)",
+  "date": "20/07/2026",
+  "author": "Omer",
+  "objective": [
+    "Primary Goal: Parts 1-2 showed difficulty-3 tasks collapse to 18%, but difficulty and app-count are confounded in AppWorld's own labels — mean num_apps rises 1.18 / 1.55 / 2.47 across levels 1/2/3. This experiment asks whether task COMPLEXITY hurts on its own, separately from multi-app coordination.",
+    "Design: 20 tasks at each difficulty level, restricted to ground-truth num_apps == 1. Holding app-count constant means any remaining drop is caused by complexity alone — longer reference solutions and more API calls. Available single-app pool: 168 / 138 / 24 tasks at d1 / d2 / d3. Random sample, seed 20260720.",
+    "Instrumentation: beyond pass/fail, each task was measured for ReAct steps used versus plan steps written (does the agent finish its own plan?), API calls made versus the reference solution's num_api_calls (does it gather enough data?), and where it broke (near-miss versus wrong-from-start versus killed by the known retry bug)."
+  ],
+  "environment": [
+    "Branch: feat/specialists-and-success-rate, commit dfb58c7 (Gilad). Isolated git worktree.",
+    "Models: Executor / Explorer / Reviewer all gpt-4.1-mini | Temperature=0.1",
+    "Parameters: MAX_ITERATIONS=6 | MAX_EXECUTOR_RUNS=2 | MAX_REACT_STEPS=16",
+    "Scoring: world.evaluate() — the official AppWorld scorer.",
+    "Slices: difficulty1-single-20, difficulty2-single-20, difficulty3-single-20.",
+    "Artifacts: analysis/difficulty_probe.py, analysis/runs/difficulty*-single-20.probe.json, .report.md, .run_log.html"
+  ],
+  "quantitative": [
+    "Controlled results — app-count held at 1 across all three levels:",
+    {"table": {
+      "headers": ["Metric", "d1 (easy)", "d2 (medium)", "d3 (hard)"],
+      "rows": [
+        ["Success rate", "85% (17/20)", "70% (14/20)", "50% (10/20)"],
+        ["GT solution lines", "25.7", "44.7", "48.5"],
+        ["GT API calls needed", "47.6", "35.0", "74.0"],
+        ["Agent API calls made", "17.7", "34.9", "35.4"],
+        ["Plan steps written", "5.8", "9.0", "9.2"],
+        ["ReAct steps used", "5.2", "8.3", "8.4"],
+        ["Step coverage", "0.90", "0.89", "0.92"],
+        ["Mean seconds", "31s", "43s", "59s"]
+      ]
+    }},
+    "Failure modes by level:",
+    {"table": {
+      "headers": ["Mode", "d1", "d2", "d3"],
+      "rows": [
+        ["solved", "17", "14", "10"],
+        ["retry_killed (stale-eval bug)", "0", "5", "7"],
+        ["out_of_steps", "0", "0", "1"],
+        ["near_miss / partial", "3", "1", "2"]
+      ]
+    }},
+    "Effort comparison, solved versus failed tasks (steps used / API-call ratio against reference solution):",
+    {"table": {
+      "headers": ["Level", "Solved: steps / call-ratio", "Failed: steps / call-ratio"],
+      "rows": [
+        ["d1", "5.0 / 0.81", "6.0 / 0.52"],
+        ["d2", "7.4 / 1.41", "10.2 / 2.48"],
+        ["d3", "8.0 / 0.87", "8.8 / 1.01"]
+      ]
+    }}
+  ],
+  "qualitative": [
+    "[1] Complexity does hurt on its own — but multi-app breadth hurts far more.",
+    "With app-count held at 1 the curve is a gentle 85% / 70% / 50%. The unrestricted curve from Parts 1-2 was 62% / 57% / 18%. Single-app difficulty-3 scores 50% against 18% unrestricted, so most of what AppWorld's difficulty label captures is coordination cost, not complexity. Complexity alone costs roughly 35 points across three levels; adding apps costs far more. Single-app d1 likewise scores 85% against 62% unrestricted — a 23-point gap that is purely the confound.",
+    "[2] The agent does not give up: step coverage is about 0.90 at every level.",
+    "It consistently executes the plan it wrote for itself, and only one task in 60 exhausted the ReAct step budget. Plans also scale correctly with difficulty (5.8 / 9.0 / 9.2 steps). Neither planning discipline nor MAX_REACT_STEPS is the binding constraint.",
+    "[3] Failing tasks work harder, not less — the agent thrashes rather than quits.",
+    "At every level, failed tasks consume more ReAct steps than solved ones. At difficulty 2 they make roughly 2.5 times the API calls of the reference solution. This is unproductive searching, not under-exploration: the agent keeps fetching without converging. The one exception is difficulty 1, where the three failures under-called at 0.52 — short lookup tasks answered too early on too little data, which is the premature-submission mode identified in Part 1.",
+    "[4] From difficulty 2 upward, the retry bug becomes the dominant failure mode.",
+    "retry_killed accounts for 0 of 3 failures at d1, but 5 of 6 at d2 and 7 of 10 at d3 — 12 of the 16 failures above difficulty 1. The hardest tasks are exactly where the Reviewer fires most often, and exactly where its corrected output is discarded by the stale-completion race. The measured d2 and d3 rates therefore UNDERSTATE the pipeline's real capability: a large share of those failures are a plumbing defect, not a reasoning limit.",
+    "[5] Aggregate API volume at difficulty 3 is the one genuine under-exploration signal.",
+    "The reference solution needs 74 API calls; the agent averages 35. Across the d3 slice it gathers roughly half the data the task requires. Combined with finding [3], the picture is an agent that fetches the wrong things energetically rather than the right things insufficiently."
+  ],
+  "conclusions": [
+    "Key insight: 'difficulty' is not one thing. Decomposed, it is mostly multi-app coordination cost, plus a smaller complexity cost — and above difficulty 1 the majority of remaining failures are the known retry bug rather than any reasoning limit.",
+    "[1] Fixing the retry path is worth more than Parts 1-2 suggested. It is concentrated precisely on the hard tasks, accounting for 12 of the 16 failures above difficulty 1.",
+    "[2] Multi-app coordination, not task complexity, is the dominant capability gap. Single-app d3 at 50% versus unrestricted d3 at 18% quantifies it directly.",
+    "[3] Do NOT raise MAX_REACT_STEPS. Only one task in 60 exhausted it, and failing tasks already use more steps than successful ones — more budget would extend the thrashing, not fix it.",
+    "[4] For hard single-app tasks the productive direction is convergence, not more searching: help the Executor recognise when it has gathered enough data rather than letting it keep querying.",
+    "Caveat: the d3 single-app pool contains only 24 tasks, so that cell is close to exhaustive rather than a wide random sample."
+  ]
+}

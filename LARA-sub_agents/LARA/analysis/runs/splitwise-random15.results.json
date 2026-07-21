@@ -1,0 +1,449 @@
+{
+  "slice": "splitwise-random15",
+  "generated_at": "2026-07-20T17:56:21",
+  "log": "analysis/runs/splitwise-random15.log",
+  "aggregate": {
+    "reviewer": {
+      "fired": 14,
+      "rescued": 0,
+      "retry_killed": 14,
+      "root_causes": {
+        "WRONG FILTER": 5,
+        "ENVIRONMENT_ERROR": 4,
+        "WRONG FORMAT": 2,
+        "WRONG SCOPE": 2,
+        "WRONG ENTITY": 1
+      }
+    },
+    "premature_strips": 1,
+    "n_tasks": 15,
+    "n_correct": 1,
+    "success_rate": 0.067,
+    "by_difficulty": {
+      "2": {
+        "n": 3,
+        "correct": 1,
+        "rate": 0.333
+      },
+      "3": {
+        "n": 12,
+        "correct": 0,
+        "rate": 0.0
+      }
+    },
+    "by_app_count": {
+      "2-app": {
+        "n": 5,
+        "correct": 1,
+        "rate": 0.2
+      },
+      "4-app": {
+        "n": 3,
+        "correct": 0,
+        "rate": 0.0
+      },
+      "5-app": {
+        "n": 3,
+        "correct": 0,
+        "rate": 0.0
+      },
+      "6-app": {
+        "n": 3,
+        "correct": 0,
+        "rate": 0.0
+      },
+      "3-app": {
+        "n": 1,
+        "correct": 0,
+        "rate": 0.0
+      }
+    },
+    "failure_types": {
+      "code_error": 7,
+      "retry_killed_stale_eval": 6,
+      "sandbox_timeout": 1
+    },
+    "mean_seconds": 71.8
+  },
+  "records": [
+    {
+      "task_id": "32616b5_2",
+      "verdict": "WRONG",
+      "correct": false,
+      "tests_passed": 5,
+      "tests_total": 10,
+      "seconds": 85.0,
+      "difficulty": 3,
+      "required_apps": [
+        "simple_note",
+        "splitwise"
+      ],
+      "instruction": "I went on a few trips each with some of my coworkers. My Simple Note has information on who owes whom what from each trip. I have already created Splitwise groups for the trips. Record the expenses accordingly in the respective groups.",
+      "failure_type": "code_error",
+      "failed_asserts": [
+        "assert the group_id_to_expense_amounts from added expenses match\\nthe data.private.group_id_to_expense_amounts.",
+        "assert the group_id_to_payer_ids from added expenses match\\nthe data.private.group_id_to_payer_ids.",
+        "assert the group_id_to_debtor_ids from the added expense shares match\\nthe data.private.group_id_to_debtor_ids."
+      ],
+      "reviewer_fired": true,
+      "reviewer_root_cause": "WRONG FORMAT",
+      "retry_noop": true,
+      "premature_strips": 1
+    },
+    {
+      "task_id": "32616b5_3",
+      "verdict": "WRONG",
+      "correct": false,
+      "tests_passed": 3,
+      "tests_total": 10,
+      "seconds": 44.0,
+      "difficulty": 3,
+      "required_apps": [
+        "simple_note",
+        "splitwise"
+      ],
+      "instruction": "I went on a few trips each with some of my friends. My Simple Note has information on who owes whom what from each trip. I have already created Splitwise groups for the trips. Record the expenses accordingly in the respective groups.",
+      "failure_type": "code_error",
+      "failed_asserts": [
+        "assert answers match.",
+        "assert model changes match splitwise.Expense, splitwise.ExpenseShare, splitwise.Notification.",
+        "assert the group_id_to_expense_amounts from added expenses match\\nthe data.private.group_id_to_expense_amounts."
+      ],
+      "reviewer_fired": true,
+      "reviewer_root_cause": "WRONG SCOPE",
+      "retry_noop": true,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "3aa1a22_1",
+      "verdict": "CORRECT",
+      "correct": true,
+      "tests_passed": 7,
+      "tests_total": 7,
+      "seconds": 45.5,
+      "difficulty": 2,
+      "required_apps": [
+        "phone",
+        "splitwise"
+      ],
+      "instruction": "I got some Splitwise group invitations over phone text messages yesterday. If their number is in my phone contact book, accept it, otherwise delete those messages.",
+      "failure_type": null,
+      "failed_asserts": [],
+      "reviewer_fired": false,
+      "reviewer_root_cause": null,
+      "retry_noop": false,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "3aa1a22_2",
+      "verdict": "WRONG",
+      "correct": false,
+      "tests_passed": 6,
+      "tests_total": 7,
+      "seconds": 54.7,
+      "difficulty": 2,
+      "required_apps": [
+        "phone",
+        "splitwise"
+      ],
+      "instruction": "I got some Splitwise group invitations over phone voice messages the day before yesterday. If their number is in my phone contact book, accept it, otherwise delete those messages.",
+      "failure_type": "code_error",
+      "failed_asserts": [
+        "assert the set of message_ids from removed phone.UserTextMessage or\\nphone.UserVoiceMessage records matches private_data.to_delete_message_ids (ignore order)."
+      ],
+      "reviewer_fired": true,
+      "reviewer_root_cause": "ENVIRONMENT_ERROR",
+      "retry_noop": true,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "3aa1a22_3",
+      "verdict": "WRONG",
+      "correct": false,
+      "tests_passed": 5,
+      "tests_total": 7,
+      "seconds": 58.8,
+      "difficulty": 2,
+      "required_apps": [
+        "phone",
+        "splitwise"
+      ],
+      "instruction": "I got some Splitwise group invitations over phone text messages this week. If their number is in my phone contact book, accept it, otherwise delete those messages.",
+      "failure_type": "code_error",
+      "failed_asserts": [
+        "assert set of group_ids from the added records matches\\nprivate_data.to_accept_group_ids (ignore order).",
+        "assert the set of message_ids from removed phone.UserTextMessage or\\nphone.UserVoiceMessage records matches private_data.to_delete_message_ids (ignore order)."
+      ],
+      "reviewer_fired": true,
+      "reviewer_root_cause": "WRONG FORMAT",
+      "retry_noop": true,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "6b6ca61_2",
+      "verdict": "WRONG",
+      "correct": false,
+      "tests_passed": 9,
+      "tests_total": 19,
+      "seconds": 117.7,
+      "difficulty": 3,
+      "required_apps": [
+        "file_system",
+        "gmail",
+        "splitwise",
+        "venmo"
+      ],
+      "instruction": "I have a list of people I owe money to, including amounts and descriptions, in debt_list.csv. For each person, (1) If they have a Venmo account, send the money publicly with the specified amount and description. (2) If not, create an individual (non-grouped) Splitwise expense with the same details so I remember to pay them later. For Splitwise expenses, attach the PDF receipt as well. They are in the same folder as the CSV file.",
+      "failure_type": "sandbox_timeout",
+      "failed_asserts": [
+        "assert model changes match venmo.Transaction, venmo.Notification,\\nsplitwise.Expense, splitwise.ExpenseShare, splitwise.Notification, ignoring\\ngmail.GlobalEmailThread, gmail.UserEmailThread, gmail.Email, gmail.Attachment,\\nvenmo.User, venmo.BankTransfer, file_system.Directory, file_system.File.",
+        "assert all the added_transactions are private/public based on public_data.privacy.",
+        "assert the venmo_user_id_to_amount from these transactions match\\nprivate_data.venmo_user_id_to_amount (tolerance of 0.51, ignore_order)."
+      ],
+      "reviewer_fired": true,
+      "reviewer_root_cause": "ENVIRONMENT_ERROR",
+      "retry_noop": true,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "6b6ca61_3",
+      "verdict": "WRONG",
+      "correct": false,
+      "tests_passed": 9,
+      "tests_total": 19,
+      "seconds": 146.5,
+      "difficulty": 3,
+      "required_apps": [
+        "file_system",
+        "gmail",
+        "simple_note",
+        "splitwise",
+        "venmo"
+      ],
+      "instruction": "I have a list of people I owe money to, including amounts and descriptions, in list_of_debts.csv. For each person, (1) If they have a Venmo account, send the money privately with the specified amount and description. (2) If not, create an individual (non-grouped) Splitwise expense with the same details so I remember to pay them later. For Splitwise expenses, attach the PDF receipt as well. They are in the same folder as the CSV file.",
+      "failure_type": "code_error",
+      "failed_asserts": [
+        "assert model changes match venmo.Transaction, venmo.Notification,\\nsplitwise.Expense, splitwise.ExpenseShare, splitwise.Notification, ignoring\\ngmail.GlobalEmailThread, gmail.UserEmailThread, gmail.Email, gmail.Attachment,\\nvenmo.User, venmo.BankTransfer, file_system.Directory, file_system.File.",
+        "assert all the added_transactions are private/public based on public_data.privacy.",
+        "assert the venmo_user_id_to_amount from these transactions match\\nprivate_data.venmo_user_id_to_amount (tolerance of 0.51, ignore_order)."
+      ],
+      "reviewer_fired": true,
+      "reviewer_root_cause": "ENVIRONMENT_ERROR",
+      "retry_noop": true,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "83a7951_1",
+      "verdict": "WRONG",
+      "correct": false,
+      "tests_passed": 7,
+      "tests_total": 10,
+      "seconds": 91.4,
+      "difficulty": 3,
+      "required_apps": [
+        "file_system",
+        "gmail",
+        "simple_note",
+        "splitwise",
+        "venmo"
+      ],
+      "instruction": "I owed people some money. They put the associated expenses on Splitwise yesterday. I paid some of them up on Venmo today. Please record payments on Splitwise for each in their respective groups. Each payment should have a note, \"Sent on Venmo, see receipt.\", and an attached Venmo receipt of it as a proof.",
+      "failure_type": "retry_killed_stale_eval",
+      "failed_asserts": [
+        "assert group_id_to_amounts from added payments matches\\nthe private_data.group_id_to_amounts.",
+        "assert group_id_to_receipt_contents from added payments matches the\\nprivate_data.group_id_to_receipt_contents.",
+        "assert receipt_content_to_amount from added payments matches the\\nprivate_data.receipt_content_to_amount."
+      ],
+      "reviewer_fired": true,
+      "reviewer_root_cause": "WRONG FILTER",
+      "retry_noop": true,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "83a7951_3",
+      "verdict": "WRONG",
+      "correct": false,
+      "tests_passed": 9,
+      "tests_total": 10,
+      "seconds": 86.1,
+      "difficulty": 3,
+      "required_apps": [
+        "file_system",
+        "gmail",
+        "simple_note",
+        "splitwise",
+        "venmo"
+      ],
+      "instruction": "I owed people some money. They put the associated expenses on Splitwise yesterday. I paid some of them up on Venmo today. Please record payments on Splitwise for each in their respective groups. Each payment should have a note, \"Payment made on Venmo, receipt attached.\", and an attached Venmo receipt of it as a proof.",
+      "failure_type": "code_error",
+      "failed_asserts": [
+        "assert model changes match splitwise.Payment, splitwise.Notification,\\nignoring file_system.File, file_system.Directory."
+      ],
+      "reviewer_fired": true,
+      "reviewer_root_cause": "WRONG FILTER",
+      "retry_noop": true,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "8d42650_1",
+      "verdict": "WRONG",
+      "correct": false,
+      "tests_passed": 4,
+      "tests_total": 10,
+      "seconds": 94.6,
+      "difficulty": 3,
+      "required_apps": [
+        "file_system",
+        "gmail",
+        "simple_note",
+        "splitwise"
+      ],
+      "instruction": "I get monthly electricity bill via email on the 1st of every month for the previous month's usage. I pay for it but its total cost is to be shared equally with my roommates and me. In our Splitwise group, create an expense for each month with a note \"electricity bill for MM/YY\" and the associated total cost (including my share). The MM/YY refers to the month and year the bill usage is for. Do it only for bills for this year's electricity usage.",
+      "failure_type": "retry_killed_stale_eval",
+      "failed_asserts": [
+        "assert model changes match splitwise.Expense, splitwise.ExpenseShare, splitwise.Notification,\\nignoring file_system.Directory, file_system.File.",
+        "assert all added expenses have group_id matching private_data.group_id.",
+        "assert all added expenses have payer_id of private_data.splitwise_user_id."
+      ],
+      "reviewer_fired": true,
+      "reviewer_root_cause": "WRONG FILTER",
+      "retry_noop": true,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "8d42650_3",
+      "verdict": "WRONG",
+      "correct": false,
+      "tests_passed": 4,
+      "tests_total": 10,
+      "seconds": 76.3,
+      "difficulty": 3,
+      "required_apps": [
+        "file_system",
+        "gmail",
+        "simple_note",
+        "splitwise"
+      ],
+      "instruction": "I get monthly cable bill via email on the 1st of every month for the previous month's usage. I pay for it but its total cost is to be shared equally with my roommates and me. In our Splitwise group, create an expense for each month with a note \"cable bill [MM-YY]\" and the associated total cost (including my share). The MM-YY refers to the month and year the bill usage is for. Do it only for bills for this year's cable usage.",
+      "failure_type": "retry_killed_stale_eval",
+      "failed_asserts": [
+        "assert model changes match splitwise.Expense, splitwise.ExpenseShare, splitwise.Notification,\\nignoring file_system.Directory, file_system.File.",
+        "assert all added expenses have group_id matching private_data.group_id.",
+        "assert all added expenses have payer_id of private_data.splitwise_user_id."
+      ],
+      "reviewer_fired": true,
+      "reviewer_root_cause": "WRONG FILTER",
+      "retry_noop": true,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "988af8e_1",
+      "verdict": "WRONG",
+      "correct": false,
+      "tests_passed": 9,
+      "tests_total": 24,
+      "seconds": 36.7,
+      "difficulty": 3,
+      "required_apps": [
+        "amazon",
+        "file_system",
+        "gmail",
+        "splitwise",
+        "todoist",
+        "venmo"
+      ],
+      "instruction": "I am going on a camping trip with some of my friends. I have created a new Todoist project for managing its tasks. Please do them for me, and mark them all complete.",
+      "failure_type": "retry_killed_stale_eval",
+      "failed_asserts": [
+        "assert model changes match todoist.Task, amazon.Order,\\nsplitwise.Group, splitwise.Expense, venmo.PaymentRequest\\ngmail.GlobalEmailThread, gmail.UserEmailThread, gmail.Email, gmail.Attachment,\\nignoring todoist.SubTask, file_system.Directory, amazon.CartEntry, amazon.Address, file_system.File",
+        "obtain added amazon.Order records using models.changed_records, and assert 1 is added.",
+        "assert the product type to quantity mapping from this order private_data.product_type_to_quantity."
+      ],
+      "reviewer_fired": true,
+      "reviewer_root_cause": "WRONG ENTITY",
+      "retry_noop": true,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "988af8e_2",
+      "verdict": "WRONG",
+      "correct": false,
+      "tests_passed": 9,
+      "tests_total": 24,
+      "seconds": 36.6,
+      "difficulty": 3,
+      "required_apps": [
+        "amazon",
+        "file_system",
+        "gmail",
+        "splitwise",
+        "todoist",
+        "venmo"
+      ],
+      "instruction": "I am going on a camping trip with some of my friends. I have created a new Todoist project for managing its tasks. Please do them for me, and mark them all complete.",
+      "failure_type": "retry_killed_stale_eval",
+      "failed_asserts": [
+        "assert model changes match todoist.Task, amazon.Order,\\nsplitwise.Group, splitwise.Expense, venmo.PaymentRequest\\ngmail.GlobalEmailThread, gmail.UserEmailThread, gmail.Email, gmail.Attachment,\\nignoring todoist.SubTask, file_system.Directory, amazon.CartEntry, amazon.Address, file_system.File",
+        "obtain added amazon.Order records using models.changed_records, and assert 1 is added.",
+        "assert the product type to quantity mapping from this order private_data.product_type_to_quantity."
+      ],
+      "reviewer_fired": true,
+      "reviewer_root_cause": "WRONG FILTER",
+      "retry_noop": true,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "988af8e_3",
+      "verdict": "WRONG",
+      "correct": false,
+      "tests_passed": 9,
+      "tests_total": 24,
+      "seconds": 37.0,
+      "difficulty": 3,
+      "required_apps": [
+        "amazon",
+        "file_system",
+        "gmail",
+        "splitwise",
+        "todoist",
+        "venmo"
+      ],
+      "instruction": "I am going on a camping trip with some of my friends. I have created a new Todoist project for managing its tasks. Please do them for me, and mark them all complete.",
+      "failure_type": "retry_killed_stale_eval",
+      "failed_asserts": [
+        "assert model changes match todoist.Task, amazon.Order,\\nsplitwise.Group, splitwise.Expense, venmo.PaymentRequest\\ngmail.GlobalEmailThread, gmail.UserEmailThread, gmail.Email, gmail.Attachment,\\nignoring todoist.SubTask, file_system.Directory, amazon.CartEntry, amazon.Address, file_system.File",
+        "obtain added amazon.Order records using models.changed_records, and assert 1 is added.",
+        "assert the product type to quantity mapping from this order private_data.product_type_to_quantity."
+      ],
+      "reviewer_fired": true,
+      "reviewer_root_cause": "WRONG SCOPE",
+      "retry_noop": true,
+      "premature_strips": 0
+    },
+    {
+      "task_id": "fb05fed_2",
+      "verdict": "WRONG",
+      "correct": false,
+      "tests_passed": 7,
+      "tests_total": 11,
+      "seconds": 65.7,
+      "difficulty": 3,
+      "required_apps": [
+        "amazon",
+        "gmail",
+        "splitwise"
+      ],
+      "instruction": "I ordered a few sweaters on amazon today. Ones in burgundy are for me, ones in pink are for Cory, and the rest are for Travis. Add an expense in our splitwise group for the total cost of the sweaters (ignoring any tax or delivery fees) shared among the three of us as per our respective shares.",
+      "failure_type": "code_error",
+      "failed_asserts": [
+        "assert the added expense's total_amount matches private_data.total_share (tolerance=0.51).",
+        "assert sum of added .share_amount for private_data.my_id\\nis private_data.my_share (tolerance=0.51).",
+        "assert sum of added .share_amount for private_data.relative_1_id\\nis private_data.relative_1_share (tolerance=0.51)."
+      ],
+      "reviewer_fired": true,
+      "reviewer_root_cause": "ENVIRONMENT_ERROR",
+      "retry_noop": true,
+      "premature_strips": 0
+    }
+  ]
+}
