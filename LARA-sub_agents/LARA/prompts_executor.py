@@ -57,11 +57,18 @@ RULES:
    ← for action tasks the answer is ALWAYS Python None. NEVER 'done', NEVER a description string.
 
 FORMAT — every response must follow this structure exactly:
+STEP: <the plan step number you are working on right now>
 Thought: <what you know so far and what you need to do next>
 ```python
 # one focused action — print everything you might need in the next step
 <code here>
 ```
+
+The STEP line tells the system which specialist to hand you. The plan is a numbered
+to-do list where each line is tagged with its app, e.g. "3. [gmail] ...". Put the
+number of the step you are currently executing. If one plan step takes you several
+code blocks, keep emitting the SAME number until that step is done, then move to the
+next. If you jump ahead or back, just state the number you are actually on.
 === SURFACE: executor_react_prompt:body === END
 """
 

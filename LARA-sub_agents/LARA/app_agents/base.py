@@ -165,11 +165,17 @@ class AppOrchestrator(BaseAppExecutor):
 
     def _build_step_specialist_map(self, plan: str) -> dict[int, BaseAppExecutor]:
         """
-        Parse numbered plan steps and map each to a specialist if its text
-        mentions a known app name.  Steps without an app match use self (generic).
+        Parse numbered plan steps and map each to a specialist.
 
-        Example plan line:
-          "2. Login to Gmail — use login_to_app('gmail')"  →  GmailExecutor
+        Primary signal: the Explorer's ``[app]`` tag that every plan line now
+        starts with (see prompts_explorer.py) — e.g.
+
+          "2. [gmail] fetch the thread ..."  →  GmailExecutor
+
+        This tag is ground truth: it is what the planner *declared* the step's app
+        to be, not a guess from scanning free text.  For any line missing a tag (or
+        tagged with an unknown app) we fall back to the legacy text scan so behaviour
+        never regresses on an untagged plan.
         """
         step_map: dict[int, BaseAppExecutor] = {}
         for line in plan.splitlines():
@@ -177,39 +183,67 @@ class AppOrchestrator(BaseAppExecutor):
             if not m:
                 continue
             step_num = int(m.group(1))
-            step_text = m.group(2).lower()
+            step_text = m.group(2)
+
+            # Primary: leading [app] tag.
+            tag = re.match(r"\s*\[([a-z_]+)\]", step_text)
+            if tag and tag.group(1) in self.specialists:
+                step_map[step_num] = self.specialists[tag.group(1)]
+                continue
+
+            # Fallback: legacy free-text scan.
+            lowered = step_text.lower()
             for app_name, specialist in self.specialists.items():
-                # Match "file_system" or "file system" in text
-                if app_name in step_text or app_name.replace("_", " ") in step_text:
+                if app_name in lowered or app_name.replace("_", " ") in lowered:
                     step_map[step_num] = specialist
                     break
         return step_map
 
     def _specialist_for_step(
         self,
-        step_num: int,
+        declared_step: int | None,
         step_map: dict[int, BaseAppExecutor],
+        last_specialist: BaseAppExecutor | None,
     ) -> BaseAppExecutor:
         """
-        Return the specialist for this step.
+        Choose the specialist for the code block about to run.
 
-        Primary lookup: the plan map built from Explorer's numbered steps.
-        Fallback for unmapped steps: if all mapped steps share a single specialist,
-        use that specialist (pure single-app task).  Otherwise use generic (self).
+        Routing is driven by the step the model *declares* it is working on
+        (``STEP: K`` — see prompts_executor.py), NOT by the ReAct iteration
+        counter.  Those two quantities diverge the moment a plan step needs more
+        than one ReAct iteration, which is exactly the multi-app misrouting bug this
+        replaces.  Precedence:
 
-        No content scanning — API responses contain email addresses and other text
-        that can falsely match specialist app names (e.g. "gmail.com" in a Spotify
-        owner email would wrongly trigger GmailExecutor).
+          1. declared_step is in the plan map  → that step's specialist (authoritative)
+          2. declared_step absent/unmapped     → reuse last_specialist (sticky, safe:
+             consecutive blocks of one app keep its specialist until the model says
+             otherwise)
+          3. nothing declared yet (first block) → single-app fallback, else generic
         """
-        if step_num in step_map:
-            return step_map[step_num]
+        if declared_step is not None and declared_step in step_map:
+            return step_map[declared_step]
 
-        # All mapped steps use the same specialist → continue with it for unmapped steps
+        # Sticky: no fresh declaration → stay on the app we were last routed to.
+        if last_specialist is not None:
+            return last_specialist
+
+        # First block, no declaration yet: if the whole plan is one app, use it.
         unique_specialists = list({id(s): s for s in step_map.values()}.values())
         if len(unique_specialists) == 1:
             return unique_specialists[0]
 
         return self  # multi-app or no-map → generic
+
+    @staticmethod
+    def _parse_declared_step(text: str) -> int | None:
+        """Extract the plan step the model declared it is working on.
+
+        Recognises a ``STEP: <n>`` line (case-insensitive, tolerant of markdown
+        bold/space) anywhere in the assistant message.  Returns None when absent so
+        the caller falls back to sticky routing.
+        """
+        m = re.search(r"(?im)^\s*\**\s*STEP\s*:?\s*(\d+)", text)
+        return int(m.group(1)) if m else None
 
     # ── LangGraph node ────────────────────────────────────────────────────────
 
@@ -307,11 +341,39 @@ class AppOrchestrator(BaseAppExecutor):
         }
         last_output_had_error = False
         active_app = ""
+        # Attempt-scoped submission tracking.  AppWorld's task status is STICKY:
+        # once any attempt calls complete_task(), env.task_completed() stays True
+        # for the rest of the task.  Evaluating on that flag judges a retry on the
+        # PREVIOUS attempt's answer.  complete_task() is a plain overwrite
+        # (supervisor/apis.py), so a retry may legitimately re-submit — we just
+        # have to wait until it actually does.
+        submitted_this_attempt = False
+        # On a reviewer-driven retry the model deliberately reproduces the whole
+        # corrected solution in one block, so "ReAct step 1 of ~10 plan steps"
+        # measures the wrong quantity and the premature-submit guard misfires.
+        is_reviewer_retry = bool(reviewer_diagnosis)
         _SIGALRM_TOKENS = ("SIGALRM", "Alarm clock", "signal.alarm", "timed out", "Killed", "TimeoutExpired")
 
+        # ── Per-step dispatch cursor (Option D + C) ───────────────────────────
+        # We route on the plan step the model DECLARES (STEP: K), not the ReAct
+        # iteration counter.  `last_specialist` makes routing sticky: until the
+        # model declares a new step, code blocks stay on the current app's
+        # specialist.  Seed it from the plan so block 1 is correct before any
+        # declaration exists.  On a reviewer retry the model collapses the whole
+        # plan into one block, so per-step routing does not apply — we fall back to
+        # the single-app / generic dispatch (last_specialist stays None).
+        last_specialist: BaseAppExecutor | None = None
+        if not is_reviewer_retry:
+            last_specialist = self._specialist_for_step(None, step_specialist_map, None)
+
         for step in range(1, MAX_REACT_STEPS + 1):
-            # ── Select specialist for this step ───────────────────────────────
-            specialist = self._specialist_for_step(step, step_specialist_map)
+            # ── Select specialist for this ReAct block ────────────────────────
+            # Route on the sticky cursor (updated from the previous block's
+            # declaration).  On retries, last_specialist is None → single-app/generic.
+            if is_reviewer_retry:
+                specialist = self._specialist_for_step(None, step_specialist_map, None)
+            else:
+                specialist = last_specialist
             system_prompt = specialist.build_system_prompt()
             if specialist.app_name:
                 active_app = specialist.app_name
@@ -330,6 +392,23 @@ class AppOrchestrator(BaseAppExecutor):
                 break
 
             conversation.append({"role": "assistant", "content": assistant_text})
+
+            # Update the dispatch cursor from the step the model just declared, so
+            # the NEXT block routes to the app it announced.  Absent declaration →
+            # cursor unchanged (sticky).  Skipped on retries (single-block path).
+            if not is_reviewer_retry:
+                declared = self._parse_declared_step(assistant_text)
+                if declared is not None:
+                    routed = self._specialist_for_step(
+                        declared, step_specialist_map, last_specialist
+                    )
+                    if routed is not last_specialist:
+                        print(
+                            f"[Orchestrator] Cursor → declared STEP {declared} "
+                            f"({routed.app_name or 'generic'})",
+                            flush=True,
+                        )
+                    last_specialist = routed
 
             code = _extract_code_block(assistant_text)
             if not code:
@@ -362,8 +441,11 @@ class AppOrchestrator(BaseAppExecutor):
             # ── Premature complete_task guard ─────────────────────────────────
             # If the plan is parseable and many steps remain, strip any complete_task
             # call before execution so the answer isn't locked at the sandbox.
+            # Disabled on reviewer-driven retries (see is_reviewer_retry above).
             stripped_complete_task = False
-            if total_plan_steps > 0 and (total_plan_steps - step) > _PREMATURE_TOLERANCE:
+            if (not is_reviewer_retry
+                    and total_plan_steps > 0
+                    and (total_plan_steps - step) > _PREMATURE_TOLERANCE):
                 if "complete_task(" in code:
                     code, stripped_complete_task = _strip_complete_task(code)
                     if stripped_complete_task:
@@ -373,6 +455,11 @@ class AppOrchestrator(BaseAppExecutor):
                             f"{step} (≈{steps_remaining} plan steps remain)",
                             flush=True,
                         )
+
+            # Checked AFTER stripping: a stripped call never reaches the sandbox,
+            # so it must not count as this attempt's submission.  Confirmed below
+            # only if the block actually ran (a SIGALRM kill submits nothing).
+            code_had_complete_task = "complete_task(" in code
 
             logger.code_block(code, label=f"ReAct step {step} / attempt {attempt_num}")
             all_code_steps.append(code)
@@ -406,6 +493,16 @@ class AppOrchestrator(BaseAppExecutor):
                     ),
                 })
                 continue
+
+            # The block ran to completion (no SIGALRM) and raised nothing, so any
+            # complete_task() in it reached the sandbox — this attempt now owns the
+            # submitted answer.  The error check matters: the model sometimes writes
+            # a bare `complete_task(...)` instead of `apis.supervisor.complete_task(...)`,
+            # which raises NameError and submits nothing.  Trusting the substring
+            # alone would mark the attempt submitted and let evaluate_task() read a
+            # PREVIOUS attempt's sticky verdict — the very bug this tracking fixes.
+            if code_had_complete_task and not last_output_had_error:
+                submitted_this_attempt = True
 
             # Plan-progress line (only when we can count steps).
             if total_plan_steps > 0:
@@ -444,6 +541,12 @@ class AppOrchestrator(BaseAppExecutor):
                 ),
             })
 
+            # Attempt-scoped: only evaluate once THIS attempt has submitted.
+            # Otherwise env.task_completed() reports a previous attempt's verdict
+            # and we would break the loop before this attempt can submit at all.
+            if not submitted_this_attempt:
+                continue
+
             eval_info = evaluate_task()
             if eval_info["completed"]:
                 if eval_info["correct"]:
@@ -461,6 +564,16 @@ class AppOrchestrator(BaseAppExecutor):
                     )
                     print(f"[Orchestrator] ❌ WRONG at step {step}: {eval_info['failures'][:2]}", flush=True)
                 break
+
+        # This attempt submitted but the loop ended before any evaluation ran
+        # (e.g. step budget exhausted, or the submit block hit SIGALRM handling).
+        # Score it now rather than reporting a submitted answer as never-completed.
+        if submitted_this_attempt and not eval_info["completed"]:
+            eval_info = evaluate_task()
+            logger.info(
+                f"Post-loop evaluation (attempt {attempt_num}): "
+                f"completed={eval_info['completed']}, correct={eval_info['correct']}"
+            )
 
         # ── Build return state ─────────────────────────────────────────────────
         combined_output = "\n".join(all_outputs)
