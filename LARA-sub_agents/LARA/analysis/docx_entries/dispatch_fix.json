@@ -1,0 +1,57 @@
+{
+  "name": "Track A, Experiment 2 — Per-Step Dispatch by Declared Plan Step (Options C + D)",
+  "date": "22/07/2026",
+  "author": "Omer",
+  "objective": [
+    "Primary Goal: Fix the positional dispatch bug. The orchestrator built a specialist map keyed by PLAN step number but indexed it with the ReAct ITERATION counter. These are equal only when every plan step takes exactly one ReAct iteration. The moment one step needs two iterations (pagination, an error retry, an exploratory print), every later step is misrouted — so the hardest cross-app merge work at the tail of a multi-app task ran in GENERIC mode with no specialist. This is why task breadth correlated so strongly with failure.",
+    "Chosen design (root-cause, not a patch): make the plan a to-do list with an explicit cursor, decoupled from ReAct iterations. The model DECLARES which plan step it is working on ('STEP: K', Option C); dispatch routes on the [app] tag of plan line K (Option D — the tag is ground truth already shipped by the Explorer). The cursor is sticky: absent a fresh declaration, code blocks stay on the current app's specialist.",
+    "Design rationale — the failure floor: a forgotten STEP declaration degrades to a SAFE STALL on the current app (cursor simply does not advance), never a silent misroute onto the wrong app. This was the decisive advantage over a pure declaration scheme, whose forgotten-declaration case drifts silently.",
+    "Split handling deliberately DEFERRED: the rare case where one plan line genuinely spans two apps is left unhandled (routes to the line's tagged app). It is bounded and non-catastrophic, and deferring it avoids adding contract the model can forget — to be added only if multi-app logs show split steps actually cost tasks."
+  ],
+  "environment": [
+    "Branch: feat/specialists-and-success-rate (Track A pipeline work), from commit 150be3d, with Track A Experiment 1 (retry fix) already applied. Isolated git worktree.",
+    "Models: Executor / Explorer / Reviewer all gpt-4.1-mini | Temperature=0.1",
+    "Parameters: MAX_ITERATIONS=6 | MAX_EXECUTOR_RUNS=2 | MAX_REACT_STEPS=16",
+    "Scoring: world.evaluate() — the official AppWorld scorer.",
+    "Slice: venmo-random15 (train+dev). Chosen because it is genuinely multi-app — the single-app difficulty3 slice cannot exercise the fix (only 4 of 28 maps there are mixed-app).",
+    "Baseline for comparison: 7/15 from the capability study's venmo slice (same tasks, same seed).",
+    "Files changed (all Track A): app_agents/base.py (tag-based map, declared-step routing, sticky cursor, _parse_declared_step) and prompts_executor.py (the STEP: contract in the response format). BaseAppExecutor frozen; no Track B files touched. Coordinated on the [app] tag format already shipped by the partner in prompts_explorer.py.",
+    "Orthogonality: the cursor is DISABLED on reviewer-driven retries (which collapse the plan into one block), so this experiment does not interact with Experiment 1's retry path.",
+    "Offline verification: test_dispatch.py covers the exact bug (a step spanning 3 blocks), forgotten declarations (sticky fallback), and look-ahead/backtrack."
+  ],
+  "quantitative": [
+    "Score: 11/15, versus 7/15 baseline.",
+    "Dispatch mechanism — measured directly from the run log:",
+    {"table": {
+      "headers": ["Metric", "Value"],
+      "rows": [
+        ["Cursor transitions (model declared STEP:, cursor followed)", "47"],
+        ["Mixed-app dispatch maps in the slice", "18"],
+        ["Code blocks routed to a specialist", "120"],
+        ["Code blocks in generic mode", "58"],
+        ["STEP: contract compliance", "essentially total (47 clean transitions)"]
+      ]
+    }},
+    "Failure breakdown (4 wrong): 22cc237_2, 22cc237_3 (payment-share calculation, tolerance assertion), 37a8675_2 (venmo Transaction/Notification completeness), 530b157_2 (Transaction + text-message completeness). In every inspected case the correct specialist WAS dispatched — the failures are wrong answers, not routing failures."
+  ],
+  "qualitative": [
+    "[1] The dispatch mechanism is proven — this is the solid part, verified in logs.",
+    "47 cursor transitions across a slice with 18 mixed-app maps. The cursor was observed live tracking venmo -> phone -> file_system arcs on three-app tasks, each block routed to the right specialist by the model's declaration. Under the old positional code those 58+ multi-app tail blocks would have drifted into the wrong specialist or generic mode.",
+    "[2] The one-step boundary lag appeared exactly as predicted, and is harmless.",
+    "Because routing happens before the LLM call and the declaration arrives inside the response, the FIRST block of a new app runs under the previous app's prompt; the cursor corrects on the next block. This is bounded, self-correcting, and never worse than the old behaviour — the old code's match at an app boundary was accidental, not intentional.",
+    "[3] STEP: compliance was near-total, contrary to the caution from Experiment 1.",
+    "Experiment 1 showed the model drops contracts (bare complete_task). Here it reliably emitted STEP:. The likely reason: STEP: sits at the very top of the required response format and is reinforced every step, whereas complete_task appears once at the end. The sticky fallback was designed for the non-compliance case and was rarely needed.",
+    "[4] The score moved 7 -> 11, but must not be oversold.",
+    "n=15, single run. Per the study's own variance warning a single run cannot distinguish a real +4 from noise (4fab96f_2 alone swings 8/8 <-> 3/8 between runs; it passed this time). The mechanism evidence is far stronger than the score evidence. Still, this is a materially better outcome than Experiment 1: here the correctly-routed specialists actually solved multi-app tasks the baseline missed, rather than merely running correctly to the same wrong answer.",
+    "[5] Remaining failures are reasoning, not routing.",
+    "All 4 wrong tasks failed on answer-correctness or action-completeness assertions with the right specialist active. Dispatch cannot fix these and did not claim to — they belong to the specialist-knowledge / reviewer-actionability track."
+  ],
+  "conclusions": [
+    "Key insight: routing on the DECLARED plan step (with the [app] tag as ground truth and a sticky fallback) removes the positional misrouting at its root, and does so with a safe failure floor rather than silent drift.",
+    "[1] Keep the fix. The mechanism is proven in logs on genuinely multi-app traffic, with near-total contract compliance and a harmless, self-correcting boundary lag.",
+    "[2] Treat 7 -> 11 as directional, not established. The log evidence already shows the fix does what it is for; a repeat run would mainly bound the variance on a number we have agreed is noisy.",
+    "[3] Split handling stays deferred until logs show a split step costing a task. None was observed here.",
+    "[4] The residual venmo failures point at the next track: payment-share and action-completeness reasoning, which per-step dispatch cannot address.",
+    "Caveat: measured once on n=15. Both Track A fixes (retry, dispatch) are now log-verified and ready to commit; further measurement should be repeat runs to bound variance, not single-run confirmations."
+  ]
+}

@@ -31,7 +31,7 @@ data/base_dbs/
 # Capability-study artifacts — raw run logs are large (~10MB) and regenerable
 # from the pinned slices in analysis/slices.json. The distilled outputs
 # (*.report.md, *.results.json, *.probe.json) ARE committed.
-analysis/runs/*.log
-analysis/runs/*.run_log.html
+analysis/runs/**/*.log
+analysis/runs/**/*.run_log.html
 # Timestamped docx backups written by append_docx_log.py / rewrite_docx_sections.py
 *.backup-*.docx

@@ -1,0 +1,63 @@
+{
+  "name": "Track A, Experiment 1 — Fixing the Reviewer Retry Path (stale-completion race)",
+  "date": "22/07/2026",
+  "author": "Omer",
+  "objective": [
+    "Primary Goal: The capability study identified retry_killed_stale_eval as the single largest failure category — 58 Reviewer fires, 1 rescue across 105 tasks, and 12 of 16 failures above difficulty 1. This experiment fixes the underlying race and re-baselines to see whether the projected recovery materialises.",
+    "Root cause (confirmed by reading the code, not assumed): AppWorld's task status is STICKY. Once attempt 1 calls complete_task(), env.task_completed() stays True for the rest of the task. Two guards then combine fatally on the retry: (a) the premature-submit guard strips the retry's complete_task() because it sees 'step 1 of ~10 plan steps', so the new answer is never submitted; (b) evaluate_task() is then called every ReAct step and reads the sticky flag — still True from attempt 1 — so the loop breaks at step 1 on attempt 1's stale, wrong verdict.",
+    "Verified mechanism directly: complete_task() in supervisor/apis.py is a plain overwrite (sets answer + status, no rejection). So a retry MAY legitimately re-submit — it simply has to be allowed to run long enough to do so. This ruled out the 'reset AppWorld state' option: no reset is needed, only attempt-scoped evaluation.",
+    "Hypothesis: making evaluation attempt-scoped (only evaluate once THIS attempt has actually submitted) plus disabling the strip guard on reviewer-driven retries will let corrected answers be scored. Whether that raises the SCORE is a separate empirical question — the fix guarantees the retry runs, not that its answer is right."
+  ],
+  "environment": [
+    "Branch: feat/specialists-and-success-rate (Track A pipeline work), from commit 150be3d. Isolated git worktree.",
+    "Models: Executor / Explorer / Reviewer all gpt-4.1-mini | Temperature=0.1",
+    "Parameters: MAX_ITERATIONS=6 | MAX_EXECUTOR_RUNS=2 | MAX_REACT_STEPS=16",
+    "Scoring: world.evaluate() — the official AppWorld scorer.",
+    "Slice: difficulty3-single-20 (retry bug is densest here — 7 of 10 baseline failures were retry_killed).",
+    "Baseline snapshot preserved at analysis/runs/baseline-pre-retryfix/ before the run overwrote the shared artifacts.",
+    "Files changed (all Track A): app_agents/base.py (attempt-scoped submission tracking + strip guard gated on reviewer retries). BaseAppExecutor left frozen; no Track B files touched.",
+    "Offline verification: a stubbed state-machine test (test_retry.py) reproduces the exact race and confirms the fix, using AppWorld's real verified semantics for complete_task() and task_completed()."
+  ],
+  "quantitative": [
+    "Score: 6/18 on the tasks scored in both runs, versus 10/18 baseline (2 of 20 tasks hung on attempt 1 in the fixed run and were never scored — see attribution). Taken at face value this looks like a regression, but the mechanism table and the per-task attribution below show the score difference does NOT measure the fix.",
+    "Retry mechanism — baseline (9 Reviewer fires) versus fixed (12 fires; the fixed run had more wrong attempt-1s, so the Reviewer was invoked more often):",
+    {"table": {
+      "headers": ["Metric", "Baseline", "Fixed"],
+      "rows": [
+        ["Retries dying at exactly 1 step", "9", "4"],
+        ["'Stripped premature' events on retries", "9", "0"],
+        ["Retries that rescued a task (wrong → correct)", "1", "0"]
+      ]
+    }},
+    "Comparison is over the 18 tasks scored in BOTH runs (2 of 20 — 34d9492_2, ec437da_2 — did not finish the fixed run: they hung/crashed on attempt 1 and were never scored, so they are excluded, not counted as regressions). On the common 18: baseline 10, fixed 6 → 2 genuine flips baseline-correct→fixed-wrong. Attribution:",
+    {"table": {
+      "headers": ["Task", "Baseline", "Fixed", "Reviewer fired in fixed run?", "Retry outcome"],
+      "rows": [
+        ["23d431c_3", "correct (attempt 1)", "wrong", "yes (ENVIRONMENT_ERROR)", "attempt 2 ran 8 steps, still wrong"],
+        ["34d9492_3", "correct (attempt 1)", "wrong", "yes (WRONG FORMAT)", "attempt 2 ran, still wrong"],
+        ["34d9492_2", "correct (attempt 1)", "did not finish", "no", "hung on attempt 1"],
+        ["ec437da_2", "correct (attempt 1)", "did not finish", "no", "hung on attempt 1"]
+      ]
+    }}
+  ],
+  "qualitative": [
+    "[1] The structural death is gone — this is the solid, log-verified result.",
+    "Retries dying at 1 step dropped from 9/10 to 4/10, and strips on retries from 9 to 0. The mass of attempt-2 lengths moved from '1 step' to 3-8 steps. The 4 remaining 1-step retries are the packed-solution case: the model reproduces the whole corrected solution in one block containing its own executed complete_task(), which is scored on its own answer — correct behaviour wearing a misleading '1 step' label.",
+    "[2] But zero retries converted a failure into a success.",
+    "Freed to run, the corrected attempts reach the SAME wrong answers as the originals. The Reviewer's diagnosis is accurate about what is wrong but not actionable enough to change the outcome — many env_error (SIGALRM) diagnoses carry no information about why a calculation was wrong, so the retry recomputes the same value.",
+    "[3] The score difference is attributable to attempt-1 variance, not to a regression in the fix — but the mechanism is the reverse of a bug.",
+    "All four flipped tasks solved on attempt 1 in the baseline with zero Reviewer fires. In the fixed run their attempt 1 diverged (temperature-0.1 sampling) and produced a WRONG answer. Two of them (34d9492_2, ec437da_2) then hung and were never scored. The other two (23d431c_3, 34d9492_3) correctly triggered the now-working retry path — the Reviewer fired, the retry actually ran (8 steps, and a packed 1-step block), and reached the same wrong answer. So these two are not 'untouched code': they are the fix working as designed on a task the baseline never sent down that path. The change cannot affect attempt-1 behaviour, so the flips originate in attempt-1 variance, not in the retry logic — but the honest framing is that the fix exercised the retry correctly and the retry could not recover the wrong answer, which is exactly finding [4].",
+    "[4] The substantive finding: retry_killed was MASKING failures, not causing them.",
+    "The study's projection of 'recover up to 36 failures' was too optimistic. The plumbing was genuinely broken AND the retries were mostly not going to succeed anyway — both true. The correct reading is that the retry-path defect inflated the apparent size of the retry opportunity.",
+    "[5] A secondary defect was found by the fix's own safety net and corrected.",
+    "The model sometimes writes a bare complete_task(...) instead of apis.supervisor.complete_task(...), which raises NameError and submits nothing. The initial submission flag was a substring match on the code text, so it wrongly counted this as a submission. Fixed by requiring the executed block to have raised no error (last_output_had_error) before marking the attempt submitted — otherwise a failed submit on a retry could re-read a previous attempt's sticky verdict, reintroducing a narrow version of the original bug."
+  ],
+  "conclusions": [
+    "Key insight: the retry path is now mechanically correct (verified in logs and offline), but fixing it does not by itself raise the score — the reviewer diagnoses need to become actionable before retries convert.",
+    "[1] Keep the fix. It removes a genuine defect (discarded corrected answers) and a second one (failed-submit miscounting). Both are correctness improvements independent of score.",
+    "[2] Do not judge the fix by this single n=20 run. The score is noise-dominated; the mechanism evidence is far stronger and is what should be trusted.",
+    "[3] The next lever for retries is the Reviewer itself: env_error diagnoses in particular tell the model 'you timed out' but not 'your filter/scope/entity was wrong', so the retry cannot correct the actual mistake.",
+    "[4] Method note for all future A/Bs: attribute every flipped task individually. Here, 2 of 4 flips were tasks that hung before scoring (excluded, not regressions) and the other 2 were attempt-1 variance that then correctly exercised the retry — none was the retry logic breaking a task. Reading the headline 6-vs-10 alone would have been actively misleading. Also: 2 of 20 tasks not finishing is itself a signal worth watching (attempt-1 hangs on hard tasks).",
+    "Caveat: measured only on difficulty3-single-20. The fix's behaviour on multi-app tasks is covered by Track A Experiment 2 (dispatch), where retries were left deliberately out of scope (cursor disabled on reviewer retries) to keep the two changes orthogonal."
+  ]
+}
