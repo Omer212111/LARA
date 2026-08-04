@@ -75,6 +75,35 @@ def _summarize_findings(findings: dict, max_chars: int = 1500) -> str:
     return "\n".join(parts)[:max_chars]
 
 
+# Reading the ledger back out of the sandbox.  This is a SEPARATE execute rather
+# than a print appended to the model's own block, because the block we most want
+# a ledger view after is the one that RAISED — an appended print would never run.
+_LEDGER_PROBE = "print(ledger_summary())"
+
+
+def _read_ledger(max_chars: int = 900) -> str:
+    """Current ledger contents, or "" when empty/unavailable.
+
+    Surfaced in every observation on multi-app tasks so the model sees the table
+    it is building instead of having to remember that the accessors exist.  The
+    first ledger run measured 3/130 code blocks (2.3%) using them and ZERO uses of
+    remember_entity/all_entities: availability alone did not change behaviour,
+    because the surrounding loop still fed printed stdout back as the observation
+    and re-reading that print stayed the cheapest path.
+    """
+    try:
+        out = execute_python_code.invoke({"code": BOOTSTRAP_CODE + "\n" + _LEDGER_PROBE})
+    except Exception:
+        return ""
+    if not out or "Traceback" in out or out.startswith(("Execution failed", "Execution Failed")):
+        return ""
+    out = out.strip()
+    # "LEDGER: 0 entities, 0 artifacts, tokens for none" — nothing worth showing yet.
+    if not out.startswith("LEDGER:") or "0 entities, 0 artifacts" in out:
+        return ""
+    return out[:max_chars]
+
+
 def _llm_call(messages: list[dict]) -> str:
     """Call the configured LLM backend. Returns assistant text."""
     if EXECUTOR_BACKEND == "openai":
@@ -279,10 +308,25 @@ class AppOrchestrator(BaseAppExecutor):
 
         # Build step→specialist map from the Explorer's plan
         step_specialist_map = self._build_step_specialist_map(plan)
+        app_labels: set[str] = set()
         if step_specialist_map:
             app_labels = {s.app_name for s in step_specialist_map.values() if s.app_name}
             logger.info(f"Per-step dispatch map: {dict((k, v.app_name or 'generic') for k, v in step_specialist_map.items())}")
             logger.info(f"Specialist(s) active: {app_labels or {'generic'}}")
+
+        # A task is a cross-app JOIN when the PLAN touches more than one app — that
+        # is exactly when the ledger earns its prompt cost, so gate visibility on it.
+        #
+        # Counted from the plan's [app] tags directly, NOT from step_specialist_map:
+        # that map drops any step whose app has no registered specialist, so a
+        # simple_note→splitwise task (a real join, and simple_note has no specialist)
+        # would collapse to one label and read as single-app.  Measured on the first
+        # probe run: plan tagged [simple_note] ×3 + [splitwise] ×3, map showed only
+        # {'splitwise'}, and ledger visibility never fired.
+        plan_apps = set(re.findall(r"^\s*\d+[.)]\s*\[([a-z_]+)\]", plan or "", re.MULTILINE))
+        is_multi_app_plan = len(plan_apps) > 1
+        if is_multi_app_plan:
+            logger.info(f"Multi-app plan ({sorted(plan_apps)}) — ledger visibility ON")
 
         # Premature-complete_task guard: count numbered plan steps. If the model
         # calls complete_task while more than 3 plan steps remain (i.e. we are at
@@ -528,12 +572,35 @@ class AppOrchestrator(BaseAppExecutor):
             else:
                 guard_message = ""
 
+            # ── Ledger visibility (multi-app tasks only) ──────────────────────
+            # Show the model the cross-app table it is building, every step.  The
+            # ledger is only worth its prompt cost when a task actually spans apps;
+            # on single-app plans it stays silent.
+            ledger_block = ""
+            if is_multi_app_plan:
+                ledger_view = _read_ledger()
+                if ledger_view:
+                    ledger_block = (
+                        f"\nYOUR LEDGER (persists across steps and attempts):\n{ledger_view}\n"
+                        "Read from it with recall_entity(name) / all_entities() instead of "
+                        "re-deriving facts from earlier output.\n"
+                    )
+                else:
+                    ledger_block = (
+                        "\nYOUR LEDGER IS EMPTY. This task spans several apps, so you are "
+                        "building a join: the same people/things appear in more than one app. "
+                        "Record each fact as you learn it —\n"
+                        "  remember_entity('<name>', <field>=<value>)   e.g. amount=, venmo_id=, email=\n"
+                        "then iterate all_entities() when you act, instead of re-reading earlier output.\n"
+                    )
+
             conversation.append({
                 "role": "user",
                 "content": (
                     f"Observation:\n{output}\n\n"
                     f"{progress_line}"
                     f"{guard_message}"
+                    f"{ledger_block}"
                     "Respond with a Python ```python ... ``` code block:\n"
                     f"{final_answer_hint}\n"
                     "• Need more data? → write the next step.\n"

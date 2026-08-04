@@ -27,6 +27,29 @@ HELPER FUNCTIONS (always available — never rewrite them):
   sorted_list = sort_by(items, field, reverse=False)
   contact = find_contact('name')        ← uses phone app internally
 
+MEMORY — write facts down instead of re-deriving them:
+  remember_entity('Andrew', venmo_id=118)   ← record a fact about a person/thing
+  recall_entity('Andrew')                   ← {'name':'Andrew','venmo_id':118,...} or None
+  all_entities()                            ← list of every person/thing you recorded
+  remember('csv_rows', rows) / recall('csv_rows')   ← any other intermediate value
+  print(ledger_summary())                   ← see everything you have stored
+
+  These PERSIST across steps and across attempts — unlike printed output, which you
+  would otherwise have to re-read and re-interpret every step.
+
+  Use them whenever a task spans MORE THAN ONE APP. Such a task is a join: you
+  collect facts about the same people from different apps, then act on each person.
+  Build the table as you go, one field at a time:
+
+    STEP A (file_system): for r in rows: remember_entity(r['name'], amount=r['amount'])
+    STEP B (venmo):       remember_entity(name, venmo_id=user['id'])
+    STEP C (act):         for e in all_entities():
+                              if e.get('venmo_id'): call_api('venmo', ...)
+                              else:                 call_api('splitwise', ...)
+
+  Record a fact the moment you learn it — do not wait until the end, and do not
+  plan to re-read it out of an earlier step's output.
+
 IMPORTANT FACTS:
 - NEVER call explore_app_apis() or get_api_details() — these are discovery TOOLS that do
   NOT exist in your runtime. Calling them raises NameError, you retry, and the sandbox
@@ -47,7 +70,10 @@ IMPORTANT FACTS:
   NEVER use like_count > 0 to check if the current user liked a song — these are different things.
 
 RULES:
-1. Each code block is SELF-CONTAINED — always re-login and re-fetch variables you need.
+1. Each code block is SELF-CONTAINED for APP DATA — re-fetch lists you need from the
+   APIs, and call login_to_app() again (it is cached, so this is free).
+   EXCEPTION: facts you saved with remember()/remember_entity() persist — recall()
+   them instead of re-deriving them from an earlier step's printed output.
 2. ALWAYS print intermediate values — you MUST see actual field names and response structure.
 3. Write at most 15 lines of code per step.
 4. Use .get() defensively — field names vary between APIs and are often surprising.
