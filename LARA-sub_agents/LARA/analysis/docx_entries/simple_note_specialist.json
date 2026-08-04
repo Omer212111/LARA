@@ -1,0 +1,59 @@
+{
+  "name": "Simple Note Specialist — Integration & Single-App Validation (15 tasks)",
+  "date": "26/07/2026",
+  "author": "Omer",
+  "objective": [
+    "Primary Goal: Simple Note was the one common app with NO specialist — its plan steps fell through to the generic executor. This was implicated in a concrete failure: simple_note+splitwise join tasks where the Simple Note portion ran without API-specific guidance, and (separately) it caused a cross-app-detection bug for the ledger. This experiment integrates the partner-authored SimpleNoteExecutor and validates that it activates and that the model follows its guidance.",
+    "Design: run 15 SINGLE-APP (num_apps==1) simple_note tasks, seed 20260720 (sample_tasks --app simple_note --solo-only). Single-app isolates the specialist — it is active on essentially every step, so its behaviour is not confounded by other apps' breadth ceiling.",
+    "Scope of claim: there is no pre-specialist baseline run for these exact tasks, and this was a deliberate single-run (not an A/B). So this experiment answers 'does the specialist activate and does the model use the APIs it teaches', NOT 'did the score improve versus generic'. The one exception is two tasks that had previously failed in generic mode (see Qualitative [3])."
+  ],
+  "environment": [
+    "Branch: feat/specialists-and-success-rate, commit e6aa113 (specialist integrated).",
+    "Models: Executor / Explorer / Reviewer all gpt-4.1-mini | Temperature=0.1",
+    "Parameters: MAX_ITERATIONS=6 | MAX_EXECUTOR_RUNS=2 | MAX_REACT_STEPS=16",
+    "Scoring: world.evaluate() — the official AppWorld scorer.",
+    "Tasks (15, solo simple_note): 0a9d82a_2/3, 6f4b9a5_1/2/3, 7847649_2/3, a30375d_1/3, afc4005_1/3, cf6abd2_1/2/3, d6ac34d_2.",
+    "Integration (Track B file + registration seam): app_agents/simple_note.py (new specialist), app_agents/__init__.py and executor.py (registration). Reconstructed from a copy-paste that had arrived mojibake'd; all API/field names per data/api_docs/standard/simple_note.json.",
+    "Artifact: analysis/runs/simplenote-solo15-run1.log"
+  ],
+  "quantitative": [
+    "Score: 13/15 correct (87%).",
+    "Specialist activation and adherence, measured from the run log:",
+    {"table": {
+      "headers": ["Signal", "Value", "Meaning"],
+      "rows": [
+        ["Steps dispatched to SimpleNoteExecutor", "85", "specialist active on every tagged step"],
+        ["Steps in generic mode", "26", "login / supervisor / final-submit (untagged) — expected"],
+        ["show_note calls", "75", "taught pattern: read body via show_note, followed"],
+        ["fetch_all_pages('simple_note',...) calls", "28", "taught pattern: paginate search_notes, followed"],
+        ["content-trap violations (content read off a search_notes result)", "0", "the specialist's #1 warning is respected"],
+        ["add_content_to_note calls", "0", "no append task in this slice — not needed"]
+      ]
+    }},
+    "The 2 failures — neither is a specialist (API-usage) error:",
+    {"table": {
+      "headers": ["Task", "Score", "Cause"],
+      "rows": [
+        ["6f4b9a5_1", "7/8 (near-miss)", "needs song release-month data not present in the note (external); retry also wrong"],
+        ["d6ac34d_2", "3/9", "add-note action produced wrong title / pinned status — content construction, not API usage"]
+      ]
+    }}
+  ],
+  "qualitative": [
+    "[1] The specialist activates correctly and the model uses what it teaches.",
+    "85 dispatches to SimpleNoteExecutor, 75 show_note calls, 28 fetch_all_pages calls, and ZERO instances of the content-trap it warns against (reading 'content' off a search_notes result, which returns None/KeyError). Every 'content' read in the run was off a show_note / full-note result — correct. The specialist is being followed, not merely present.",
+    "[2] Both failures are task-inherent, not specialist-caused.",
+    "6f4b9a5_1 requires a mapping from song name to release month — data that does not live in the Simple Note, so no note-API guidance could supply it (it is arguably mis-sampled as solo simple_note). d6ac34d_2 is an add-note action whose title/pinned status came out wrong — a content-construction mistake outside the specialist's API remit.",
+    "[3] The strongest causal signal: two tasks that FAILED in generic mode now pass.",
+    "0a9d82a_2 and 0a9d82a_3 (habit-streak questions) both failed while running in generic mode during the earlier ledger probe. With the specialist active they both PASS. This is the closest thing to a before/after available here and it points the right way — though it is n=2 and confounded with run-to-run variance, so it is suggestive, not conclusive.",
+    "[4] Consistent with the capability study's specialist findings.",
+    "Like the audited Splitwise and Todoist specialists, SimpleNoteExecutor is sound and hallucination-free: every API it drove the model to call is a real member of the simple_note surface. It closes a genuine coverage hole rather than patching a single task."
+  ],
+  "conclusions": [
+    "Key insight: the Simple Note specialist is validated as active, correctly used, and hallucination-free on single-app tasks (13/15, 0 specialist-caused failures). It closes the last common-app coverage gap.",
+    "[1] Keep the specialist. Integration is clean (specialist file + a one-line registration in the executor seam) and BaseAppExecutor is untouched.",
+    "[2] The 13/15 score is strong but NOT a proven lift — no A/B baseline. The two generic-fail -> specialist-pass flips are the only causal evidence and are n=2. To make the causal claim, re-run these 15 IDs on the pre-e6aa113 commit.",
+    "[3] Multi-app remains the open frontier. This validates the specialist in isolation; whether it lifts the simple_note+splitwise JOIN tasks (its original motivation) is a separate question gated by the multi-app breadth ceiling, and by ledger adoption (still 0).",
+    "Caveat: single run, n=15, one task likely mis-sampled as solo. Numbers are directional; the mechanism/adherence evidence is the reliable part."
+  ]
+}
