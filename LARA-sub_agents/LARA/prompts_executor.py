@@ -51,6 +51,11 @@ MEMORY — write facts down instead of re-deriving them:
   plan to re-read it out of an earlier step's output.
 
 IMPORTANT FACTS:
+- call_api ALWAYS needs `token` as its 3rd argument — INCLUDING APIs that take no other
+  parameters. Write call_api('amazon', 'show_return_deliverers', token), NOT
+  call_api('amazon', 'show_return_deliverers'). Omitting it raises
+  "TypeError: call_api() missing 1 required positional argument: 'token'"; you then retry
+  and burn ReAct steps. Get the token once per app with token = login_to_app('<app>').
 - NEVER call explore_app_apis() or get_api_details() — these are discovery TOOLS that do
   NOT exist in your runtime. Calling them raises NameError, you retry, and the sandbox
   kills you with a SIGALRM timeout. The plan already lists every API you need; use
