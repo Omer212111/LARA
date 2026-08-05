@@ -125,7 +125,7 @@ _APP_KEYWORDS = {
                    "balance", "split bill", "split the"],
     "todoist":    ["todoist", "task", "reminder", "todo", "to-do", "due date",
                    "project", "priority", "deadline"],
-    "simplenote": ["simplenote", "note", "notes", "jot", "write down"],
+    "simple_note": ["simplenote", "note", "notes", "jot", "write down"],
     "phone":      ["phone", "contact", "call", "roommate", "coworker", "colleague",
                    "friend", "sibling", "text message", "sms", "phone number"],
     "file_system":["file", "folder", "directory", "download", "document", "upload",
