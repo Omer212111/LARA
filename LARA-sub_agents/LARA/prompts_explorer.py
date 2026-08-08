@@ -231,7 +231,7 @@ OUTPUT FORMAT — your final message (no tool calls) must follow this structure 
   PLAN:
     1. [<app_name>] <step> — <why>  [field: 'exact_field_name_from_api_doc']  [use: helper() if applicable]
     2. [<app_name>] ...
-    N. <YOU decide the task type and write ONLY ONE final line — never both>:
+    N. [<app_name>] <YOU decide the task type and write ONLY ONE final line — never both>:
        • If the task asks to FIND / COUNT / RETURN a value (verbs: "how many", "what is",
          "find", "tell me", "which") → apis.supervisor.complete_task(answer=<the_value>)
        • If the task asks to DO something (verbs: "place an order", "buy", "order", "rate",
@@ -241,9 +241,32 @@ OUTPUT FORMAT — your final message (no tool calls) must follow this structure 
           description string. Returning a count for an action task FAILS the eval.
        ⚠️ Emit exactly one final-step line — do NOT give the Executor two options to pick from.
 
-  REQUIRED: every step line MUST start with [<app_name>] (e.g. [amazon], [gmail], [file_system], [spotify]).
+  REQUIRED: every step line MUST carry the tag immediately after the step number, e.g.
+  "1. [amazon] ..." — the tag comes right after the "N." delimiter, before any other text
+  (e.g. [amazon], [gmail], [file_system], [spotify]).
   The Executor reads this label to activate the right specialist — missing it forces generic fallback.
   Every step that reads or sorts by a field MUST also name it explicitly: [field: 'play_count'].
+
+  ⚠️ UNDERSCORE-ONLY SPELLING — CRITICAL, READ THIS: multi-word app names use an underscore,
+  NEVER a space, inside the tag brackets:
+       [file_system]  ✓ correct        [file system]  ✗ BREAKS THE PARSER ENTIRELY
+       [simple_note]  ✓ correct        [simple note]  ✗ BREAKS THE PARSER ENTIRELY
+  A space inside the brackets does NOT just fall back to generic dispatch — the Executor's
+  parser cannot match the tag AT ALL, and the entire step line is silently dropped. Always
+  copy the exact app_name spelling from the "ABOUT APPWORLD" list at the top of this prompt.
+
+  [generic] TAG — use this when a step genuinely does not belong to one single app, e.g. combining
+  results already fetched from two apps, or a pure Python aggregation/comparison step:
+    Example: "3. [generic] Combine the phone contact emails with the venmo transaction totals
+              collected in steps 1-2 and compute the sum for each person."
+  Do NOT invent an app name for a step that isn't really that app's — use [generic] instead.
+
+  ONE APP PER STEP — never combine two apps' actions into a single numbered step, even if they're
+  related. If a step needs both a phone lookup AND a venmo action, split it into two steps:
+    WRONG: "2. [phone][venmo] Look up Alice's contact and send her $10."
+    RIGHT: "2. [phone] Look up Alice's contact to get her email.
+            3. [venmo] Send $10 to the email found in step 2."
+  Each step line must carry EXACTLY ONE tag — never two app tags on the same line.
 """
 
 
