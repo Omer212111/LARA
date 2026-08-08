@@ -100,8 +100,16 @@ next. If you jump ahead or back, just state the number you are actually on.
 
 
 def build_react_initial_message(task: str, plan: str, findings: str,
-                                 last_error: str, reviewer_diagnosis: str) -> str:
-    """Builds the first user message for the ReAct Executor loop."""
+                                 last_error: str, reviewer_diagnosis: str,
+                                 eval_failure: str = "", previous_answer: str = "") -> str:
+    """Builds the first user message for the ReAct Executor loop.
+
+    `eval_failure` and `previous_answer` are ground truth from the grader and
+    from the last attempt's own code.  The Reviewer already receives both, but it
+    compresses them into a one-word ROOT_CAUSE; passing them through unmodified
+    means the retry reasons about what the test suite actually asserted rather
+    than about a paraphrase of it.
+    """
     parts = [f"TASK:\n{task}", f"\nPLAN FROM EXPLORER:\n{plan}"]
     if findings and findings != "None yet.":
         parts.append(f"\nPRIOR FINDINGS (earlier attempts):\n{findings}")
@@ -109,5 +117,20 @@ def build_react_initial_message(task: str, plan: str, findings: str,
         parts.append(f"\nLAST ERROR:\n{last_error}")
     if reviewer_diagnosis and reviewer_diagnosis != "None":
         parts.append(f"\nREVIEWER DIAGNOSIS:\n{reviewer_diagnosis}")
+    if eval_failure and eval_failure != "None":
+        parts.append(
+            "\nFAILED TEST ASSERTIONS (verbatim from the grader — this is ground "
+            "truth, the diagnosis above is only an interpretation of it):\n"
+            f"{eval_failure}\n"
+            "Each line is a check your last answer did NOT satisfy. Make the new "
+            "attempt satisfy every one of them."
+        )
+    if previous_answer and previous_answer != "None":
+        parts.append(
+            f"\nPREVIOUSLY SUBMITTED ANSWER (graded WRONG):\n{previous_answer}\n"
+            "Do NOT submit this value again. If your new reasoning arrives at the "
+            "same value, that means you repeated the earlier mistake — re-read the "
+            "failed assertions and change your approach before submitting."
+        )
     parts.append("\nBegin. Write your first step.")
     return "".join(parts)

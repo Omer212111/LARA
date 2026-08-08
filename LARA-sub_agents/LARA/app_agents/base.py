@@ -104,6 +104,45 @@ def _read_ledger(max_chars: int = 900) -> str:
     return out[:max_chars]
 
 
+_LEDGER_WRITE_RE = re.compile(r"\b(remember_entity|remember)\s*\(")
+# Reads that CONSUME stored facts — the half that decides whether the ledger is
+# actually load-bearing.  ledger_summary() is deliberately excluded: it only
+# prints a view, so counting it would let "print the ledger" masquerade as use.
+_LEDGER_READ_RE = re.compile(r"\b(recall_entity|recall|all_entities)\s*\(")
+
+
+def _count_ledger_use(code: str) -> tuple[int, int]:
+    """(writes, reads) the model's own code performs against the ledger.
+
+    Counts calls only in the model's block, never in BOOTSTRAP_CODE (which
+    *defines* these names, and whose docstrings contain worked examples like
+    `remember_entity('Andrew', amount=42.50)` — 5 of them).  Bootstrap is
+    prepended to `full_code`, not to `code`, so the call site already passes the
+    model's block alone; stripping it here as well keeps the metric honest if
+    that ever changes, since a silent +5 per step would manufacture adoption.
+
+    Writes and reads are counted separately because they answer different
+    questions: writes say the model records facts, reads say it actually acts on
+    them.  A task with writes but no reads is hoarding — the ledger is costing
+    prompt space without being load-bearing.
+    """
+    if BOOTSTRAP_CODE and BOOTSTRAP_CODE in code:
+        code = code.replace(BOOTSTRAP_CODE, "")
+    writes = reads = 0
+    in_docstring = False
+    for line in code.splitlines():
+        stripped = line.strip()
+        # Toggle on lines that open/close a docstring (odd number of triple quotes).
+        if (stripped.count('"""') + stripped.count("'''")) % 2 == 1:
+            in_docstring = not in_docstring
+            continue
+        if in_docstring or stripped.startswith("#") or stripped.startswith("def "):
+            continue
+        writes += len(_LEDGER_WRITE_RE.findall(line))
+        reads  += len(_LEDGER_READ_RE.findall(line))
+    return writes, reads
+
+
 def _llm_call(messages: list[dict]) -> str:
     """Call the configured LLM backend. Returns assistant text."""
     if EXECUTOR_BACKEND == "openai":
@@ -289,6 +328,11 @@ class AppOrchestrator(BaseAppExecutor):
         findings           = state.get("findings", {})
         last_error         = state.get("last_error", "")
         reviewer_diagnosis = state.get("reviewer_diagnosis", "")
+        # Grader ground truth + what we actually submitted last time.  Both are
+        # already in state (set below on a wrong answer) but until now only the
+        # Reviewer read them; the Executor saw only the Reviewer's paraphrase.
+        prev_eval_failure  = state.get("last_eval_failure", "")
+        prev_answer        = state.get("final_answer", "")
 
         # Action tasks (place order, buy, rate, send...) must submit answer=None.
         _task_body = task.split("Task:", 1)[-1].strip().lower()
@@ -336,12 +380,23 @@ class AppOrchestrator(BaseAppExecutor):
         _PREMATURE_TOLERANCE = 3
 
         # Base conversation — system message is replaced per-step
+        # Grader assertions and the prior answer are retry-only context: on
+        # attempt 1 there is nothing graded yet, and a value left over in state
+        # would read as "you already tried this" when we have not.
+        _is_retry = bool(reviewer_diagnosis)
         base_user_msg = build_react_initial_message(
             task, plan,
             _summarize_findings(findings),
             last_error         if last_error         else "None",
             reviewer_diagnosis if reviewer_diagnosis else "None",
+            eval_failure    = prev_eval_failure if _is_retry else "",
+            previous_answer = prev_answer       if _is_retry else "",
         )
+        if _is_retry:
+            logger.info(
+                f"Retry context: failed_asserts={len(prev_eval_failure.splitlines())} line(s), "
+                f"previous_answer={prev_answer[:60]!r}"
+            )
         # We store conversation WITHOUT a system message; it's injected fresh each step.
         conversation: list[dict] = [{"role": "user", "content": base_user_msg}]
 
@@ -385,6 +440,13 @@ class AppOrchestrator(BaseAppExecutor):
         }
         last_output_had_error = False
         active_app = ""
+        # Ledger adoption counters (multi-app steps only — the ledger is silent
+        # elsewhere, so single-app steps would dilute the rate toward zero).
+        ledger_writes_total      = 0
+        ledger_reads_total       = 0
+        ledger_steps_total       = 0
+        ledger_steps_with_writes = 0
+        ledger_steps_with_reads  = 0
         # Attempt-scoped submission tracking.  AppWorld's task status is STICKY:
         # once any attempt calls complete_task(), env.task_completed() stays True
         # for the rest of the task.  Evaluating on that flag judges a retry on the
@@ -576,6 +638,26 @@ class AppOrchestrator(BaseAppExecutor):
             # Show the model the cross-app table it is building, every step.  The
             # ledger is only worth its prompt cost when a task actually spans apps;
             # on single-app plans it stays silent.
+            # Adoption instrumentation.  The ledger's whole open question is whether
+            # the model writes to it; nothing in the log answered that, because the
+            # logger records CODE and OUTPUT but never the user turn we build here.
+            # So count writes in the code the model just wrote, and record which
+            # ledger prompt it was shown when it did (or did not) write.
+            _writes, _reads = _count_ledger_use(code)
+            if is_multi_app_plan:
+                ledger_writes_total += _writes
+                ledger_reads_total  += _reads
+                ledger_steps_total  += 1
+                if _writes:
+                    ledger_steps_with_writes += 1
+                if _reads:
+                    ledger_steps_with_reads += 1
+                logger.info(
+                    f"Ledger adoption: step {step} wrote {_writes} / read {_reads} "
+                    f"[w:{ledger_steps_with_writes} r:{ledger_steps_with_reads} "
+                    f"of {ledger_steps_total} steps]"
+                )
+
             ledger_block = ""
             if is_multi_app_plan:
                 ledger_view = _read_ledger()
@@ -593,6 +675,13 @@ class AppOrchestrator(BaseAppExecutor):
                         "  remember_entity('<name>', <field>=<value>)   e.g. amount=, venmo_id=, email=\n"
                         "then iterate all_entities() when you act, instead of re-reading earlier output.\n"
                     )
+                # Which prompt the model actually got. The user turn is never
+                # logged, so without this the two branches are indistinguishable
+                # after the fact — and that ambiguity already produced one wrong
+                # diagnosis ("the teaching branch never runs").
+                logger.info(
+                    f"Ledger prompt shown: {'TABLE' if ledger_view else 'EMPTY/teaching'}"
+                )
 
             conversation.append({
                 "role": "user",
@@ -650,12 +739,34 @@ class AppOrchestrator(BaseAppExecutor):
         if eval_info["completed"] and not eval_info["correct"]:
             eval_failure_str = "\n".join(eval_info.get("failures", []))
 
+        # Prefer a quoted literal (the answer verbatim).  Fall back to the raw
+        # argument expression so computed submissions — complete_task(answer=total),
+        # the common VALUE-task shape — still yield something the retry can be told
+        # not to repeat, instead of an empty string.
         answer = ""
         for code_step in all_code_steps:
             m = re.search(r"complete_task\(\s*answer\s*=\s*['\"](.+?)['\"]", code_step)
             if m:
                 answer = m.group(1).strip()
                 break
+        if not answer:
+            for code_step in all_code_steps:
+                m = re.search(r"complete_task\(\s*answer\s*=\s*", code_step)
+                if not m:
+                    continue
+                # Scan to the matching close-paren so nested calls survive intact
+                # (round(x, 2) must not truncate to "round(x, 2").
+                depth, start = 1, m.end()
+                for i in range(start, len(code_step)):
+                    ch = code_step[i]
+                    depth += (ch == "(") - (ch == ")")
+                    if depth == 0:
+                        expr = code_step[start:i].strip()
+                        if expr and expr != "None":
+                            answer = f"<computed: {expr}>"
+                        break
+                if answer:
+                    break
 
         new_findings = dict(findings)
         new_findings[f"attempt_{attempt_num}"] = combined_output[:1500]
@@ -668,6 +779,33 @@ class AppOrchestrator(BaseAppExecutor):
         )
 
         had_error = last_output_had_error and not eval_info["completed"]
+
+        # One grep-able adoption line per multi-app task. This is the number the
+        # whole passive-vs-voluntary decision rests on, so it is emitted even when
+        # it is zero — a silent absence is what made the last read ambiguous.
+        if ledger_steps_total:
+            _wrate = ledger_steps_with_writes / ledger_steps_total
+            _rrate = ledger_steps_with_reads / ledger_steps_total
+            # The verdict this metric exists to produce:
+            #   HOARDING  — records facts, never acts on them (ledger not load-bearing)
+            #   READ_ONLY — reads without writing (stale/empty reads; likely a no-op)
+            #   JOINING   — both, i.e. the ledger is doing the job it was built for
+            #   UNUSED    — neither
+            if ledger_writes_total and ledger_reads_total:
+                _verdict = "JOINING"
+            elif ledger_writes_total:
+                _verdict = "HOARDING"
+            elif ledger_reads_total:
+                _verdict = "READ_ONLY"
+            else:
+                _verdict = "UNUSED"
+            logger.info(
+                f"LEDGER_ADOPTION apps={len(plan_apps)}({'+'.join(sorted(plan_apps))}) "
+                f"attempt={attempt_num} steps={ledger_steps_total} "
+                f"writes={ledger_writes_total} reads={ledger_reads_total} "
+                f"w_steps={ledger_steps_with_writes} r_steps={ledger_steps_with_reads} "
+                f"w_rate={_wrate:.2f} r_rate={_rrate:.2f} verdict={_verdict}"
+            )
 
         print(
             f"[Orchestrator] Done — attempt {attempt_num}, {len(all_code_steps)} steps, "
