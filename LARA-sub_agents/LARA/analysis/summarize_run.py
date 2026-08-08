@@ -52,20 +52,33 @@ _NOT_CALLED_RE = re.compile(
 # Benchmark header, e.g. "Task 3/15: 396c5a2_1" (logger.task_header).
 _TASK_HEADER_RE = re.compile(r"^Task\s+\d+/\d+:\s*(?P<tid>[0-9a-f]{7}_\d+)\s*$")
 
-# Failure signatures, checked in order; first match wins. Order matters: the
-# environment/infra causes are checked before the reasoning ones, so a task that
-# crashed is never misfiled as a merely-wrong answer.
+# Failure signatures. Order matters (see _classify_failure): INFRASTRUCTURE kills
+# win first (the task never had a fair chance), then the SUBMISSION verdict, then
+# runtime errors, then budget.
 #
 # NOTE: do NOT key "no_submit" off `task_signal_complete=False` — that flag is
 # also False whenever the run ends via "FINISH (hit MAX_EXECUTOR_RUNS)", which is
 # the normal end state for a task that DID submit but submitted a wrong answer.
-_FAILURE_SIGNATURES = [
+_INFRA_SIGNATURES = [
     ("sandbox_timeout",   ["SIGALRM", "sandbox timeout", "Execution timed out"]),
     ("api_error",         ["APIStatusError", "RateLimitError", "Connection error"]),
-    ("code_error",        ["Traceback (most recent call last)", "NameError", "AttributeError",
-                           "TypeError", "KeyError", "IndexError"]),
-    ("budget_exhausted",  ["MAX_REACT_STEPS", "hit max ReAct steps", "recursion_limit"]),
 ]
+
+# A genuine runtime error in this environment is one of these markers:
+#   - the AppWorld sandbox's own error output:  "Execution failed. Traceback:"
+#   - a standard Python crash:                  "Traceback (most recent call last)"
+# We must NOT key off bare exception names ("NameError", "KeyError", ...): the
+# auto-injected BOOTSTRAP_CODE ledger helpers contain an `except NameError:` guard,
+# so those substrings appear in EVERY code block and would mark every task a
+# code_error. That false positive (and the fact the sandbox emits "Execution
+# failed. Traceback:" rather than the CPython header these needles looked for, so
+# real errors were MISSED) was found on 2026-08-05.
+_RUNTIME_ERROR_MARKERS = (
+    "Execution failed. Traceback:",
+    "Execution Failed. Traceback:",
+    "Traceback (most recent call last)",
+)
+_BUDGET_MARKERS = ("MAX_REACT_STEPS", "hit max ReAct steps", "recursion_limit")
 
 # A retry that ends at step 1 was killed by the stale-completion race: the
 # premature-submit guard strips its complete_task(), then evaluate_task() reads
@@ -86,8 +99,16 @@ def _parse_failed_asserts(raw: str | None) -> list[str]:
 
 
 def _classify_failure(task_block: str) -> str:
-    """Best-effort failure category from a task's log block."""
-    for label, needles in _FAILURE_SIGNATURES:
+    """Best-effort failure category from a task's log block.
+
+    Order matters. Infrastructure kills win first (the task never had a fair
+    chance). Then the SUBMISSION verdict: if the task submitted an answer that the
+    suite scored wrong, that is what it is — wrong_answer (or retry_killed) — even
+    if a transient step raised mid-exploration and the ReAct loop recovered from
+    it. code_error is reserved for tasks whose failure was an UNRECOVERED runtime
+    error that left them without any scored submission.
+    """
+    for label, needles in _INFRA_SIGNATURES:
         if any(n in task_block for n in needles):
             return label
     if "complete_task() called but WRONG" in task_block:
@@ -97,6 +118,10 @@ def _classify_failure(task_block: str) -> str:
         if _REVIEWER_FIRED in task_block and _RETRY_NOOP_RE.search(task_block):
             return "retry_killed_stale_eval"
         return "wrong_answer"
+    if any(n in task_block for n in _RUNTIME_ERROR_MARKERS):
+        return "code_error"
+    if any(n in task_block for n in _BUDGET_MARKERS):
+        return "budget_exhausted"
     if "complete_task" not in task_block:
         return "no_submit"
     return "wrong_answer"
@@ -328,10 +353,14 @@ def _cli() -> None:
         "records": records,
     }
     json_path = args.out_dir / f"{args.slice_name}.results.json"
-    json_path.write_text(json.dumps(payload, indent=2))
+    json_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
+    # encoding="utf-8" is required: the report contains ✅/❌/✓ and em dashes, and
+    # Path.write_text defaults to the platform codec (cp1252 on Windows), which
+    # raises UnicodeEncodeError and leaves the .md unwritten.
     md_path = args.out_dir / f"{args.slice_name}.report.md"
-    md_path.write_text(render_markdown(args.slice_name, records, agg, args.log))
+    md_path.write_text(render_markdown(args.slice_name, records, agg, args.log),
+                       encoding="utf-8")
 
     print(f"Parsed {len(records)} tasks — {agg['n_correct']}/{agg['n_tasks']} "
           f"correct ({agg['success_rate']:.0%})")
