@@ -247,6 +247,19 @@ OUTPUT FORMAT — your final message (no tool calls) must follow this structure 
   The Executor reads this label to activate the right specialist — missing it forces generic fallback.
   Every step that reads or sorts by a field MUST also name it explicitly: [field: 'play_count'].
 
+  ⚠️ CARRY YOUR REASONING INTO THE STEP LINE. The Executor runs the PLAN — it does not
+  act on your REASONING or API-quirks notes. Any parameter you worked out up there must
+  be written into the step line that uses it, with its value:
+       REASONING says "send publicly, so private=False"
+       → step MUST read: call_api('venmo', 'create_transaction', token, ..., private=False)
+       NOT: "send the money publicly"     ← the flag never reaches the code
+  This matters most for BINARY flags that change what the action MEANS, and getting one
+  wrong makes a correct-looking action fail the grader:
+       private=True/False        (Venmo: private vs public payment)
+       group_id=<id> or None     (Splitwise: group expense vs individual)
+  Before you finish, re-read your REASONING and confirm every parameter named there
+  appears in a step line.
+
   ⚠️ UNDERSCORE-ONLY SPELLING — CRITICAL, READ THIS: multi-word app names use an underscore,
   NEVER a space, inside the tag brackets:
        [file_system]  ✓ correct        [file system]  ✗ BREAKS THE PARSER ENTIRELY
@@ -267,6 +280,54 @@ OUTPUT FORMAT — your final message (no tool calls) must follow this structure 
     RIGHT: "2. [phone] Look up Alice's contact to get her email.
             3. [venmo] Send $10 to the email found in step 2."
   Each step line must carry EXACTLY ONE tag — never two app tags on the same line.
+
+  ── DATA FLOW: declare IN / OUT on multi-app plans ──────────────────────────────
+  A task that spans MORE THAN ONE APP is a join: the same people or things appear
+  in several apps, and no single app holds the whole row. On such plans, add an
+  indented IN:/OUT: line under each step that produces or consumes shared data.
+
+    OUT:  what this step ADDS to the shared record. Two forms:
+            OUT: debts[] {{name, email, amount, description}}   ← creates the record set
+            OUT: debts[].venmo_id                             ← adds ONE field to each
+    IN:   which previously-declared fields this step needs.
+
+  A step whose work is per-item says so, and says which items:
+    FOR EACH debts[]                        ← every item
+    FOR EACH debts[] WHERE venmo_id != null ← only those matching
+
+  Write the WHERE condition instead of nesting "If found: / Else:" under a step.
+  Two filtered steps are always clearer than one step with empty branches.
+
+  WORKED EXAMPLE — "pay each person in debt_list.csv via Venmo, or file a
+  Splitwise expense with the PDF receipt if they have no Venmo account":
+
+    1. [file_system] Read debt_list.csv and parse the rows.
+       OUT: debts[] {{name, email, amount, description}}
+    2. [file_system] Locate the PDF receipt in the same folder.
+       OUT: receipt_path
+    3. [venmo] FOR EACH debts[]: search_users to find a Venmo account.
+       IN:  debts[]
+       OUT: debts[].venmo_id
+    4. [venmo] FOR EACH debts[] WHERE venmo_id != null: send the payment.
+       IN:  debts[].venmo_id, debts[].amount, debts[].description
+       OUT: debts[].paid, debts[].txn_id
+    5. [splitwise] FOR EACH debts[] WHERE venmo_id == null: create the expense.
+       IN:  debts[].email, debts[].amount, debts[].description, receipt_path
+       OUT: debts[].expense_id
+    6. [supervisor] apis.supervisor.complete_task(answer=None)
+
+  Note step 4's "OUT: debts[].paid": ALWAYS declare an OUT field recording that the
+  action was performed — paid, sent, ordered, created, expense_id, txn_id. This is
+  what lets the Executor tell which items are already done, so a retry does not
+  repeat work that succeeded. Declaring only the inputs of an action step is the
+  single most common gap in these plans.
+
+  Every name used in an IN: must appear in an earlier OUT:. If a step needs
+  something no earlier step produces (a file path, a date, an id), add the step
+  that produces it — that omission is how attachments and receipts get silently
+  dropped from a plan.
+
+  Single-app plans do NOT need IN:/OUT: — omit those lines entirely.
 """
 
 

@@ -111,6 +111,52 @@ _LEDGER_WRITE_RE = re.compile(r"\b(remember_entity|remember)\s*\(")
 _LEDGER_READ_RE = re.compile(r"\b(recall_entity|recall|all_entities)\s*\(")
 
 
+_OUT_RE = re.compile(r"^\s*OUT:\s*(.+)$", re.MULTILINE)
+_IN_RE  = re.compile(r"^\s*IN:\s*(.+)$",  re.MULTILINE)
+
+
+def _parse_declared_schema(plan: str) -> tuple[list[str], list[str]]:
+    """(record_sets, fields) the plan's OUT: lines declare.
+
+    Two OUT forms, per prompts_explorer.py:
+        OUT: debts[] {name, email, amount}   → record set + its initial fields
+        OUT: debts[].venmo_id                → one field added to each record
+
+    Returned as display strings, not a structure: this is fed back to the model
+    as the schema it said it would build, so it stays close to what it wrote.
+    Parsing is best-effort — a plan with no OUT: lines yields ([], []), which
+    keeps single-app and legacy plans on exactly the old code path.
+    """
+    sets: list[str] = []
+    fields: list[str] = []
+    for raw in _OUT_RE.findall(plan or ""):
+        raw = raw.strip()
+        # Pull out the brace form FIRST — "debts[] {name, email}" contains commas
+        # that must not be treated as separators between OUT entries.
+        def _take_set(m: "re.Match") -> str:
+            cols = [c.strip() for c in m.group(2).split(",") if c.strip()]
+            sets.append(f"{m.group(1)}[] {{{', '.join(cols)}}}")
+            fields.extend(cols)
+            return ""                                # consume it
+        rest = re.sub(r"(\w+)\[\]\s*\{([^}]*)\}", _take_set, raw)
+        for part in rest.split(","):
+            part = part.strip().rstrip(".")
+            if not part:
+                continue
+            m = re.match(r"^(\w+)\[\]\.(\w+)$", part)
+            if m:                                    # debts[].venmo_id
+                fields.append(m.group(2))
+                continue
+            m = re.match(r"^(\w+)\[\]$", part)       # debts[]
+            if m:
+                sets.append(f"{m.group(1)}[]")
+                continue
+            if re.match(r"^\w+$", part):             # receipt_path — a scalar
+                fields.append(part)
+    # de-duplicate, preserve order
+    return list(dict.fromkeys(sets)), list(dict.fromkeys(fields))
+
+
 def _count_ledger_use(code: str) -> tuple[int, int]:
     """(writes, reads) the model's own code performs against the ledger.
 
@@ -369,6 +415,19 @@ class AppOrchestrator(BaseAppExecutor):
         # {'splitwise'}, and ledger visibility never fired.
         plan_apps = set(re.findall(r"^\s*\d+[.)]\s*\[([a-z_]+)\]", plan or "", re.MULTILINE))
         is_multi_app_plan = len(plan_apps) > 1
+
+        # The plan's own OUT: declarations, parsed once. These name the ledger
+        # schema the Explorer committed to, so the model is told what to record
+        # rather than left to invent keys. Measured motivation: on a 6-app task
+        # with 12 ledger writes the model stored only raw lists via remember()
+        # and never once used remember_entity — it kept its INPUTS and dropped
+        # the record of what it had already DONE, which is what the grader checks.
+        declared_sets, declared_fields = _parse_declared_schema(plan)
+        if declared_sets or declared_fields:
+            logger.info(
+                f"Plan declares schema: sets={declared_sets or '—'} "
+                f"fields={declared_fields or '—'}"
+            )
         if is_multi_app_plan:
             logger.info(f"Multi-app plan ({sorted(plan_apps)}) — ledger visibility ON")
 
@@ -658,6 +717,23 @@ class AppOrchestrator(BaseAppExecutor):
                     f"of {ledger_steps_total} steps]"
                 )
 
+            # The schema the plan committed to, restated every step. Without this
+            # the model picks its own keys — measured: all writes went to
+            # remember() as raw lists, none to remember_entity, so nothing
+            # recorded which items had already been acted on.
+            schema_block = ""
+            if is_multi_app_plan and (declared_sets or declared_fields):
+                schema_block = "\nSCHEMA YOUR PLAN DECLARED (record these as you go):\n"
+                if declared_sets:
+                    schema_block += "".join(f"  {s}\n" for s in declared_sets)
+                if declared_fields:
+                    schema_block += f"  fields: {', '.join(declared_fields)}\n"
+                schema_block += (
+                    "  Use remember_entity('<name>', <field>=<value>) — one row per person/thing —\n"
+                    "  NOT remember() with a whole list. After an action succeeds, record it on the\n"
+                    "  SAME row (e.g. paid=True, txn_id=...) so a later step can skip what is done.\n"
+                )
+
             ledger_block = ""
             if is_multi_app_plan:
                 ledger_view = _read_ledger()
@@ -689,6 +765,7 @@ class AppOrchestrator(BaseAppExecutor):
                     f"Observation:\n{output}\n\n"
                     f"{progress_line}"
                     f"{guard_message}"
+                    f"{schema_block}"
                     f"{ledger_block}"
                     "Respond with a Python ```python ... ``` code block:\n"
                     f"{final_answer_hint}\n"

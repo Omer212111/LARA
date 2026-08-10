@@ -18,7 +18,7 @@ from langchain_core.messages import HumanMessage
 from langgraph.graph import END, StateGraph
 
 import logger
-from config import MAX_EXECUTOR_RUNS, MAX_ITERATIONS
+from config import ENABLE_REVIEWER_RETRY, MAX_EXECUTOR_RUNS, MAX_ITERATIONS
 from explorer import explorer_node
 from executor import executor_node
 from reviewer import reviewer_node
@@ -45,6 +45,9 @@ def _after_executor(state: AgentState) -> str:
     The Reviewer→Executor edge BYPASSES the Supervisor, so the MAX_EXECUTOR_RUNS /
     MAX_ITERATIONS guards MUST live here — otherwise the limits never fire on this path.
     """
+    if not ENABLE_REVIEWER_RETRY:
+        return "Supervisor"
+
     eval_failure   = state.get("last_eval_failure", "")
     had_code_error = bool(state.get("last_error", ""))
     reviewer_ran   = state.get("reviewer_ran", False)

@@ -9,8 +9,22 @@ All runtime constants in one place. Change here, takes effect everywhere.
 # the retry Executor was cut off. Raised to 6 so a full re-plan/retry cycle (incl. the
 # Reviewer path) can actually complete. recursion_limit auto-scales as MAX_ITERATIONS*4.
 MAX_ITERATIONS    = 6    # hard ceiling on total Explorer+Executor node runs per task
-MAX_EXECUTOR_RUNS = 2    # max number of Executor attempts per task
+MAX_EXECUTOR_RUNS = 1    # max number of Executor attempts per task (1 = no retry)
 MAX_REACT_STEPS   = 16   # max ReAct steps per Executor attempt
+
+# ── Reviewer / retry ──────────────────────────────────────────────────────────
+# False → one Executor attempt per task: the Reviewer never fires and the
+# Supervisor cannot send a second attempt either. Both paths must be closed;
+# closing only the Reviewer still allows a retry via the Supervisor.
+#
+# Measured basis for turning this off: over 165 saved tasks the Reviewer fired
+# 75 times and rescued 1 (1.3%). A retry-context change (grader assertions passed
+# through verbatim) reached 11/11 retries and converted none. Each retry costs a
+# Reviewer call plus a full second Executor attempt, so on a large run it is a
+# significant token cost for no measured gain.
+#
+# Set back to True when a retry mechanism is shown to convert on train/dev.
+ENABLE_REVIEWER_RETRY = False
 
 # ── Executor backend — change ONE line to switch models ──────────────────────
 #   "openai"  → uses EXECUTOR_MODEL_OPENAI via OpenAI API
