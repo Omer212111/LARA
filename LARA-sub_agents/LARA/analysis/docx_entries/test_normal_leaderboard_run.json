@@ -1,0 +1,37 @@
+{
+  "name": "Leaderboard Run 1 — test_normal (official, single-attempt configuration)",
+  "date": "10/08/2026",
+  "author": "Omer",
+  "objective": [
+    "Primary Goal: Obtain an official AppWorld leaderboard score on the test_normal split (168 tasks). This is the first time LARA has been measured on a held-out test set; every prior number in this project comes from train or dev.",
+    "Secondary Goal: Establish whether disabling the retry path is safe. Across 165 saved train tasks the Reviewer fired 75 times and rescued 1 (1.3%), and a retry that received the grader's failed assertions verbatim reached 11/11 retries and converted none. Each retry costs a Reviewer call plus a full second Executor attempt, so on a 168-task run it is a large token cost for no measured gain.",
+    "Constraint from the AppWorld README: test_normal may be used ONLY to obtain an aggregate score. No per-task evaluation reports were opened, no error analysis was performed, and no prompt or parameter was tuned on anything this run produced. The code was frozen at commit 1c2a803 before the run and must stay frozen until test_challenge is also run — the maintainer verifies that no changes were made after the last evaluation."
+  ],
+  "environment": [
+    "Code: commit 1c2a803 on feat/specialists-and-success-rate (merge of Track A + Lior's Track B fixes + Gilad's Track C fixes).",
+    "Models: gpt-4.1-mini for all agents (Explorer, Executor, Supervisor).",
+    "Configuration: MAX_EXECUTOR_RUNS=1 and ENABLE_REVIEWER_RETRY=False — one Executor attempt per task. Both had to be set: the Supervisor can dispatch a second attempt on its own, so disabling the Reviewer alone still retried.",
+    "MAX_REACT_STEPS=16. fetch_all_pages defaults to page_limit=20 (AppWorld's default is 5, cap is 20).",
+    "Experiment name: lara_test_normal. Wall clock 195.5 minutes."
+  ],
+  "quantitative": [
+    "OFFICIAL RESULT (appworld evaluate lara_test_normal test_normal):",
+    "  aggregate    — TGC 54.8 | SGC 37.5",
+    "  difficulty_1 — TGC 82.5 | SGC 63.2",
+    "  difficulty_2 — TGC 50.0 | SGC 37.5",
+    "  difficulty_3 — TGC 33.3 | SGC 14.3",
+    "92 of 168 tasks correct. Three tasks ended 'not called' — they ran 182-213s and never submitted an answer; these count as failures and are indistinguishable from wrong answers in the aggregate.",
+    "Reference point, NOT a like-for-like comparison: the saved train baseline is 50.3% (n=165, 2026-07-20). That baseline was measured WITH the retry path enabled and on a different split, so the 54.8 here cannot be read as a +4.5 improvement."
+  ],
+  "qualitative": [
+    "Difficulty is the dominant factor. TGC falls 2.5x from difficulty 1 (82.5) to difficulty 3 (33.3). The gradual decline observed while the run was in progress — around 62% at the midpoint, 55% by the end — was not noise but the difficulty distribution of the split.",
+    "SGC falls faster than TGC at every level, and the gap widens with difficulty: 82.5/63.2 at level 1 versus 33.3/14.3 at level 3. Solving one variant of a scenario rarely means solving all of them. This is consistent with the accumulation hypothesis developed on train: a task requiring ~20 sequential correct API actions fails if any one of them is wrong, and scenario-level scoring compounds that across variants.",
+    "Instrumentation caution recorded for future runs: the progress figures reported live during this run (75-80%) were WRONG. The monitor counted 'grep -c ^✅ Task', but the log emits two line formats — '✅ Task <id>' and '✅ Task CORRECT' — so the count was inflated and eventually reported 170/167, more tasks than the split contains. That impossible number is what exposed the bug. Always count unique task ids, and trust the BENCHMARK COMPLETE line over any hand-rolled tally."
+  ],
+  "conclusions": [
+    "54.8 TGC / 37.5 SGC is LARA's first official held-out score and the number that will appear on the leaderboard for this configuration.",
+    "Running without the retry path is viable: the score did not collapse relative to the train baseline, while roughly 45% of tasks (the historical Reviewer fire rate) avoided a second full Executor attempt.",
+    "The submission is NOT complete. The leaderboard requires bundles for BOTH test_normal and test_challenge (416 tasks) with a shared experiment-name prefix. test_challenge has not been run.",
+    "Difficulty 3 (TGC 33.3) is where the remaining headroom is, but per the README it must be investigated on train/dev — nothing in this run's per-task output may inform a fix."
+  ]
+}

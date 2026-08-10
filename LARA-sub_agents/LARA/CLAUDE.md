@@ -20,7 +20,16 @@ python benchmark.py --app file_system --n 10
 
 # Official AppWorld scoring after a benchmark run
 appworld evaluate lara_langchain_agent train
+
+# Held-out splits (single-use — see the leaderboard section below before running)
+appworld evaluate lara_test_normal test_normal
 ```
+
+`benchmark.py` hardcodes `experiment_name = "lara_langchain_agent"`. Runs that
+need their own output directory (a dev probe, a leaderboard run) subclass
+`AppWorld` to inject `experiment_name` rather than editing `benchmark.py` —
+see the leaderboard scripts. Otherwise a dev or test run silently overwrites
+the train outputs.
 
 `load_dotenv()` runs at startup; `OPENAI_API_KEY` must be in `.env`. There is no test suite, lint config, or build step — correctness is measured only by `world.evaluate()`.
 
@@ -87,6 +96,28 @@ remaining importers — was dropped in the split.)
 
 Three tracks, one per open problem. Each owns a disjoint file set; the rules
 below keep them that way.
+
+### Official held-out score (test_normal, 2026-08-10, commit `1c2a803`)
+
+```
+    type     | task_goal_completion | scenario_goal_completion
+-------------+----------------------+-------------------------
+ aggregate   |         54.8         |           37.5
+difficulty_1 |         82.5         |           63.2
+difficulty_2 |         50.0         |           37.5
+difficulty_3 |         33.3         |           14.3
+```
+
+92/168 correct, one Executor attempt per task (`MAX_EXECUTOR_RUNS=1`,
+`ENABLE_REVIEWER_RETRY=False`), 195 min. Reports under
+`experiments/outputs/lara_test_normal/evaluations/`.
+
+**The test splits are single-use.** Per the AppWorld README, `test_normal` and
+`test_challenge` may only be run for an aggregate score: do not open per-task
+evaluation reports, do not do error analysis on them, and do not tune anything
+against what they produce. All diagnosis belongs on train/dev. A leaderboard
+submission also needs BOTH splits packed under one experiment-name prefix, and
+the code must not change between the two runs.
 
 ### The measured problem statement
 
