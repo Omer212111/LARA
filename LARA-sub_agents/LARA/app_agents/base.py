@@ -19,6 +19,12 @@ import requests
 from langchain_core.messages import AIMessage
 
 import logger
+try:
+    from analysis import hardcode_trace
+except ImportError:      # dev-only tracer — a missing analysis/ must never break a run
+    class hardcode_trace:                                    # type: ignore[no-redef]
+        note = note_specialist = note_code_block = start_task = end_task = \
+            staticmethod(lambda *a, **k: None)
 from config import (
     EXECUTOR_BACKEND,
     EXECUTOR_MODEL_OLLAMA,
@@ -91,6 +97,11 @@ def _read_ledger(max_chars: int = 900) -> str:
     because the surrounding loop still fed printed stdout back as the observation
     and re-reading that print stayed the cheapest path.
     """
+    # Framework-initiated execution: the orchestrator runs this code itself, the
+    # model never asked for it. Traced separately from model-written blocks because
+    # "the agent's logic executes code on its own" is a different compliance
+    # question from "the model chose to call a helper we provided".
+    hardcode_trace.note("framework:ledger_probe_execute")
     try:
         out = execute_python_code.invoke({"code": BOOTSTRAP_CODE + "\n" + _LEDGER_PROBE})
     except Exception:
@@ -381,12 +392,16 @@ class AppOrchestrator(BaseAppExecutor):
         prev_answer        = state.get("final_answer", "")
 
         # Action tasks (place order, buy, rate, send...) must submit answer=None.
-        _task_body = task.split("Task:", 1)[-1].strip().lower()
-        is_action_task = (
-            "action task" in plan.lower()
-            or bool(re.match(r"(place an order|buy me|order all|order the)", _task_body))
-        )
+        #
+        # Read ONLY from the Explorer's plan, never from the task wording. The former
+        # text regex (place an order|buy me|order all|order the) matched 0 tasks in
+        # train, dev and test_normal and 48 in test_challenge — it could only have been
+        # written from a test split, which the AppWorld rules forbid. The plan-declared
+        # signal is both legal and strictly more general: prompts_explorer.py already
+        # requires the Explorer to classify the task and say so.
+        is_action_task = "action task" in plan.lower()
         if is_action_task:
+            hardcode_trace.note("base:is_action_task", detail="plan_declared")
             final_answer_hint = (
                 "• Done? This is an ACTION task → `apis.supervisor.complete_task(answer=None)` "
                 "and STOP. NEVER pass an order id, count, or message string."
@@ -414,6 +429,14 @@ class AppOrchestrator(BaseAppExecutor):
         # probe run: plan tagged [simple_note] ×3 + [splitwise] ×3, map showed only
         # {'splitwise'}, and ledger visibility never fired.
         plan_apps = set(re.findall(r"^\s*\d+[.)]\s*\[([a-z_]+)\]", plan or "", re.MULTILINE))
+        # [supervisor] and [generic] are not apps. [supervisor] tags the mandatory
+        # complete_task() line that ends EVERY plan, and [generic] tags pure-Python
+        # glue steps — counting either as an app made every single-app task read as a
+        # join. Measured on broad-20 before this fix: 20/20 tasks classified multi-app
+        # (plans tagged ['generic','spotify','supervisor']), which fired the ledger
+        # block and 171 orchestrator-initiated sandbox executions on tasks that touch
+        # exactly one app.
+        plan_apps -= {"supervisor", "generic"}
         is_multi_app_plan = len(plan_apps) > 1
 
         # The plan's own OUT: declarations, parsed once. These name the ledger
@@ -540,6 +563,7 @@ class AppOrchestrator(BaseAppExecutor):
             else:
                 specialist = last_specialist
             system_prompt = specialist.build_system_prompt()
+            hardcode_trace.note_specialist(specialist.app_name)
             if specialist.app_name:
                 active_app = specialist.app_name
                 print(f"[Orchestrator] Step {step}: dispatching to {specialist.__class__.__name__}", flush=True)
@@ -627,6 +651,9 @@ class AppOrchestrator(BaseAppExecutor):
             code_had_complete_task = "complete_task(" in code
 
             logger.code_block(code, label=f"ReAct step {step} / attempt {attempt_num}")
+            # Model-written code only — BOOTSTRAP_CODE is prepended into `full_code`
+            # below, not into `code`, so helper DEFINITIONS never inflate the counts.
+            hardcode_trace.note_code_block(code)
             all_code_steps.append(code)
 
             full_code = BOOTSTRAP_CODE + "\n" + code
@@ -678,6 +705,41 @@ class AppOrchestrator(BaseAppExecutor):
                 )
             else:
                 progress_line = ""
+
+            # ── Missing-login recovery ────────────────────────────────────────
+            # login()/TOKENS are no longer injected by BOOTSTRAP_CODE; the model
+            # defines them itself in step 1 (see REACT_EXECUTOR_SYSTEM), which is what
+            # keeps us clear of the "hardcode any API calls into their agent's logic"
+            # rule. The one new failure mode that creates is the model skipping that
+            # definition and then calling login() anyway, which NameErrors on every
+            # later step. Hand it the definition back rather than letting it burn the
+            # step budget rediscovering the problem.
+            #
+            # This is error-recovery text, not an API call: the orchestrator executes
+            # nothing here and reaches no app. It is the same shape as the SIGALRM and
+            # no-code-block recovery hints above.
+            login_guard = ""
+            if "NameError" in output and ("'login'" in output or "'TOKENS'" in output):
+                print(f"[Orchestrator] ⚠️  login() undefined at step {step} — re-injecting definition",
+                      flush=True)
+                logger.info(f"[ReAct step {step}] login() was never defined — recovery hint injected")
+                login_guard = (
+                    "\n⚠️  You called login() without defining it. It is NOT built in — you "
+                    "must define it yourself, once. Put this at the TOP of your next code "
+                    "block, exactly:\n"
+                    "  TOKENS = {}\n"
+                    "  def login(app):\n"
+                    "      if app in TOKENS:\n"
+                    "          return TOKENS[app]\n"
+                    "      prof = apis.supervisor.show_profile()\n"
+                    "      pw = next(c['password'] for c in apis.supervisor.show_account_passwords()\n"
+                    "                if c['account_name'] == app)\n"
+                    "      user = prof['phone_number'] if app == 'phone' else prof['email']\n"
+                    "      TOKENS[app] = getattr(apis, app).login(username=user, "
+                    "password=pw)['access_token']\n"
+                    "      return TOKENS[app]\n"
+                    "Then continue with the work for this step in the same block.\n"
+                )
 
             # Strong follow-up if we just stripped a premature complete_task.
             if stripped_complete_task:
@@ -764,6 +826,7 @@ class AppOrchestrator(BaseAppExecutor):
                 "content": (
                     f"Observation:\n{output}\n\n"
                     f"{progress_line}"
+                    f"{login_guard}"
                     f"{guard_message}"
                     f"{schema_block}"
                     f"{ledger_block}"

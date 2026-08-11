@@ -22,7 +22,7 @@ class SimpleNoteExecutor(BaseAppExecutor):
 
 ⚠️ CALLING CONVENTION — call EVERY simple_note API the same way:
      call_api('simple_note', '<api_name>', token, **kwargs)
-   login: token = login_to_app('simple_note')   ← standard email login, no special-casing needed
+   login: token = login('simple_note')   ← standard email login, no special-casing needed
    Paginated → fetch_all_pages.   Single-item / action APIs → call_api.
 
 🔑 THE ONE FIELD-NAME TRAP THAT CAUSES MOST WRONG ANSWERS:
@@ -46,19 +46,19 @@ class SimpleNoteExecutor(BaseAppExecutor):
       → {message}   REPLACES whichever fields you pass (content is a full overwrite, not an append).
   add_content_to_note(access_token, note_id, append_or_prepend, added_content)
       → {message}   append_or_prepend ∈ {'append','prepend'}. Adds a NEW LINE between the
-      existing content and added_content automatically — use this instead of manually
-      concatenating strings and calling update_note.
+      existing content and added_content automatically. It only adds at the very start or
+      the very end — it cannot change text already inside the note (that is update_note).
   delete_note(access_token, note_id)
       → {message}
 
-  # Account / profile (rarely needed — the account already exists; login_to_app handles auth)
+  # Account / profile (rarely needed — the account already exists; login() handles auth)
   show_profile(email=None)                    → public info, NO access_token required
   show_account(access_token)                  → private info incl. verified, last_logged_in
   update_account_name(access_token, first_name=None, last_name=None)
   delete_account(access_token)
   (signup / verify_account / send_verification_code / send_password_reset_code /
    reset_password exist but are account-lifecycle flows — essentially never needed;
-   the task's account is already provisioned and login_to_app already works.)
+   the task's account is already provisioned and login() already works.)
 
 ═══ FIELD NAMES (non-obvious) ═══
 
@@ -70,57 +70,31 @@ class SimpleNoteExecutor(BaseAppExecutor):
   account (show_account): first_name, last_name, email, registered_at, last_logged_in, verified
   profile (show_profile): first_name, last_name, email, registered_at
 
-═══ SORTING / "MOST RECENT" — a real gotcha ═══
+═══ SORTING / ORDERING — a real gotcha ═══
   sort_by accepts only 'created_at' or 'updated_at', prefixed +/- (e.g. '-updated_at').
   Default (no query, no sort_by) is '-updated_at' (most recently updated first).
   ⚠️ If you pass BOTH query AND sort_by, the API ranks by query relevance FIRST, paginates,
   THEN sorts only WITHIN each page — this is NOT a global sort across all matching notes.
-  For "most recently updated/created note" (no text search involved), do NOT pass a query:
-     notes = fetch_all_pages('simple_note', 'search_notes', token)   # no query= at all
-     top   = sort_by(notes, 'updated_at', reverse=True)[0]           # sort client-side to be safe
-  Prefer sorting client-side with the sort_by() helper over trusting server-side sort_by=
-  whenever you also need to filter/search by query text.
+  So server-side sort_by= is only trustworthy when you pass no query. Whenever you need an
+  ordering over everything that matched, fetch the notes with fetch_all_pages and order them
+  client-side with the sort_by() helper instead.
 
 ═══ COMMON TASK PATTERNS ═══
 
-  "How many notes do I have (optionally: tagged X / pinned)?":
-    token = login_to_app('simple_note')
-    notes = fetch_all_pages('simple_note', 'search_notes', token)   # add tags=['X'] or pinned=True to filter
-    apis.supervisor.complete_task(answer=str(len(notes)))
+  Listing notes — search_notes is paginated, so always fetch_all_pages:
+    token = login('simple_note')
+    notes = fetch_all_pages('simple_note', 'search_notes', token)
+    # optional server-side filters: query='text', tags=['X'], pinned=True
 
-  "What is the content of the note titled 'X'?":
-    token = login_to_app('simple_note')
+  Reading a body — a search result only gets you the note_id; show_note gets the content:
+    token = login('simple_note')
     notes = fetch_all_pages('simple_note', 'search_notes', token, query='X')
     nid   = get_field(notes, 'title', 'X', 'note_id')
     note  = call_api('simple_note', 'show_note', token, note_id=nid)
-    apis.supervisor.complete_task(answer=note['content'])
+    body  = note['content']
 
-  "Create a note titled 'X' with content 'Y'" (optionally tagged / pinned):
-    token = login_to_app('simple_note')
-    call_api('simple_note', 'create_note', token, title='X', content='Y')
-    apis.supervisor.complete_task(answer=None)
-
-  "Add/append 'Z' to the note titled 'X'":
-    token = login_to_app('simple_note')
-    notes = fetch_all_pages('simple_note', 'search_notes', token, query='X')
-    nid   = get_field(notes, 'title', 'X', 'note_id')
-    call_api('simple_note', 'add_content_to_note', token,
-             note_id=nid, append_or_prepend='append', added_content='Z')
-    apis.supervisor.complete_task(answer=None)
-
-  "Pin / unpin the note titled 'X'":
-    token = login_to_app('simple_note')
-    notes = fetch_all_pages('simple_note', 'search_notes', token, query='X')
-    nid   = get_field(notes, 'title', 'X', 'note_id')
-    call_api('simple_note', 'update_note', token, note_id=nid, pinned=True)   # or pinned=False
-    apis.supervisor.complete_task(answer=None)
-
-  "Delete the note titled 'X'":
-    token = login_to_app('simple_note')
-    notes = fetch_all_pages('simple_note', 'search_notes', token, query='X')
-    nid   = get_field(notes, 'title', 'X', 'note_id')
-    call_api('simple_note', 'delete_note', token, note_id=nid)
-    apis.supervisor.complete_task(answer=None)
+  Writing — create_note requires BOTH title and content; every other write API is keyed by
+  note_id, so you must resolve the note_id first exactly as above.
 
 ═══ PAGINATION ═══
   search_notes is the ONLY listing API and IS paginated (default 5/page, max page_limit=20) —
@@ -130,8 +104,11 @@ class SimpleNoteExecutor(BaseAppExecutor):
 
 ═══ CRITICAL RULES ═══
   • search_notes results have NO content field — call show_note(note_id) to read the body.
-  • update_note's content param is a full REPLACE, not an append — use add_content_to_note
-    for "add/append/prepend to the note" tasks instead of hand-rolling old+new concatenation.
+  • update_note's content param is a full REPLACE of the body, not an append.
+    add_content_to_note only adds a whole new line at the very start or end — it cannot
+    change text that is already inside the note. To edit existing text, show_note first,
+    modify that part of the returned content string, then send the WHOLE modified string
+    back as update_note(content=...) — anything you drop from the string is deleted.
   • create_note / update_note / delete_note / add_content_to_note / update_account_name /
     delete_account are ACTION tasks → apis.supervisor.complete_task(answer=None). NEVER pass
     a note_id, count, or 'done'.
@@ -139,7 +116,7 @@ class SimpleNoteExecutor(BaseAppExecutor):
     computed value.
   • Do not confuse title (a note's identifier, unique-ish but not enforced) with content
     (the note's body) — search_notes gives you title only, show_note gives you both.
-  • App name is 'simple_note' (underscore) everywhere — in login_to_app, call_api's first
+  • App name is 'simple_note' (underscore) everywhere — in login(), call_api's first
     argument, and the Explorer plan's [simple_note] tag. Never 'simplenote' or 'simple note'.
 === SURFACE: simple_note_specialist:prompt === END
 """

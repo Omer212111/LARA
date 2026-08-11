@@ -74,7 +74,9 @@ SEMANTIC API SELECTION — common task patterns:
      → DEDICATED phone step: fetch_all_pages('phone', 'search_contacts', token, relationship='<singular>')
        returns the people in that group; use [c['email'] for c in group] for the email list.
        ⚠️ Do NOT use show_contact_relationships — it returns relationship TYPES, not people.
-  "<one person by name>" (Alice, Bob)  → find_contact('Alice') from phone contacts (single dict)
+  "<one person by name>" (Alice, Bob)
+     → [phone] step: fetch_all_pages('phone', 'search_contacts', login('phone'), query='Alice')
+       then take [0]['email']. Never guess an email address.
 
   TIME-RELATIVE WINDOWS — "last N days" / "yesterday" / "today" / "this week":
     The sandbox clock is NOT the wall clock (datetime.now() will give the wrong date).
@@ -106,30 +108,29 @@ SEMANTIC API SELECTION — common task patterns:
      → show_received_payment_requests()
      Action verbs: "requests", "payment requests", "requests I received", "money requested from me"
 
-  AMAZON PATTERNS — match the task to ONE flow. These three "order" cases are DIFFERENT:
+  CONTAINER SCOPING — "all the <X> in my <container>" names a set you ALREADY OWN.
+  This is the same rule as AGGREGATION SCOPE above, applied to acting instead of reading,
+  and it holds for every app: a cart, a wish list, a playlist, a folder, a project and an
+  inbox are all containers you can list directly.
 
-  "Place an order for all <X> in my CART" → it orders items ALREADY in the cart:
-     1. login_to_app('amazon')
-     2. call_api('amazon','show_cart',token)  — dict, NOT paginated
-     3. For each cart item, check call_api('amazon','show_product',token,product_id=pid)['product_type'];
-        delete_product_from_cart for every item whose type != <X>.
-     4. place_order (try each payment card; address by name). Final answer: None.
-     ⚠️ Do NOT search_products. Do NOT touch the wishlist. Do NOT change quantities.
+     • List the container and work through ITS items. Do NOT run a catalog-wide or
+       library-wide search — a search returns the whole store, not your container.
+     • If the container holds a mix and the task names a type, read each item's type from
+       the app's per-item detail API before acting. Do not infer it from the item's name.
+     • Act only on the matching items. Leave every other item in the container untouched,
+       at its existing quantity and position — removing or re-ordering them is a separate
+       change the task did not ask for.
+     • Moving items BETWEEN containers (wish list → cart, folder → folder) is usually a
+       dedicated API. Look for it before falling back to delete-then-add, which loses
+       quantity and metadata.
 
-  "Place an order for all <X> in my WISH LIST" → it orders <X> items from the wishlist:
-     1. login → 2. empty the cart (delete every cart item) →
-     3. call_api('amazon','show_wish_list',token) — not paginated;
-        for each item whose show_product type == <X>, move_product_from_wish_list_to_cart
-        with quantity = that item's wishlist quantity →
-     4. place_order. Final answer: None.
-     ⚠️ Do NOT search_products. Leave non-<X> wishlist items untouched.
+  RANK BY THE ENTITY THE TASK NAMES. "from its highest-rated seller" ranks SELLERS, not
+  products — fetch the seller record for each candidate and compare that rating. A field
+  with the right name on the wrong entity is the most common way a ranking step goes wrong.
 
-  "Buy me a <X> ... from its highest-rated seller ..." → orders ONE new product:
-     1. login → 2. empty the cart →
-     3. search_products(product_type='<X>'); for each candidate look up
-        show_seller(seller_id)['rating']; pick the one whose SELLER rating is highest →
-     4. add_product_to_cart(that product, quantity=1) →
-     5. place_order with the named card + named address. Final answer: None.
+  For all of the above: confirm the container's listing API, the per-item detail API and
+  the exact field that carries the type with get_api_details BEFORE writing the plan. Which
+  endpoint lists a container, and what its type field is called, differs per app.
 
   "return a product"             → show_orders (find order) → show_return_deliverers → initiate_return
   "subscribe to prime"           → show_payment_cards → subscribe_prime(payment_card_id, duration='monthly'|'yearly')
@@ -140,7 +141,8 @@ SEMANTIC API SELECTION — common task patterns:
 
   ⚠️ NEVER hardcode product_id / payment_card_id / address_id in a plan step — they must be
      looked up at runtime. NEVER add an unrelated app (e.g. phone) unless the task names a person.
-  ⚠️ search_sellers does NOT exist — get a seller's rating only via show_seller(seller_id).
+  ⚠️ search_sellers returns only {seller_id, name} — it carries NO rating. Use it to turn a
+     seller name into an id, then show_seller(seller_id) for the rating.
 
   AMAZON FIELD TRAPS:
   Product name field is 'name' (NOT 'title').
@@ -183,14 +185,16 @@ PRE-LOADED API DOCS:{docs}
 ⚠️ explore_app_apis and get_api_details are YOUR discovery tools ONLY. The Executor that
    runs your plan does NOT have them — they will crash with NameError. NEVER write a plan
    step that calls explore_app_apis or get_api_details. Do all discovery now, then write a
-   plan whose steps use ONLY the helper functions below (login_to_app / call_api /
+   plan whose steps use ONLY the helper functions below (login / call_api /
    fetch_all_pages / etc.) and real AppWorld API names passed to call_api.
 
 EXECUTOR HELPER FUNCTIONS — instruct the Executor to use these in your plan steps:
 
-  login_to_app(app_name)
+  login(app_name)
     WHEN: always, as the first step for every app the task involves.
-    PLAN WORDING: "Use login_to_app('spotify') to get the access token."
+    PLAN WORDING: "Use login('spotify') to get the access token."
+    NOTE: the Executor defines login() itself in its first code block (it is not one of
+    ours) and it caches, so naming it in several steps costs one round trip.
 
   call_api(app_name, api_name, token, **kwargs)
     WHEN: single-item lookups (show_song, show_email, show_order, show_playlist, etc.)
@@ -217,9 +221,11 @@ EXECUTOR HELPER FUNCTIONS — instruct the Executor to use these in your plan st
     PLAN WORDING: "Use sort_by(songs, 'play_count', reverse=False)[0] for the least-played song."
                   "Use sort_by(songs, 'like_count', reverse=True)[0] for the most-liked song."
 
-  find_contact(name)
-    WHEN: task mentions a person by name or relationship.
-    PLAN WORDING: "Use find_contact('Alice') to get Alice's email from phone contacts."
+  Looking a person up — there is no helper for this; name the phone API in the step.
+    WHEN: task mentions a person by name or by relationship.
+    PLAN WORDING: "Use fetch_all_pages('phone', 'search_contacts', login('phone'),
+                   query='Alice') and take [0]['email']."
+    search_contacts is paginated, so always fetch_all_pages, never call_api.
 
 OUTPUT FORMAT — your final message (no tool calls) must follow this structure exactly:
   APP: <app_name(s)>

@@ -3,6 +3,8 @@ LARA MAS — Configuration
 All runtime constants in one place. Change here, takes effect everywhere.
 """
 
+import os
+
 # ── Graph limits ──────────────────────────────────────────────────────────────
 # NOTE: `iterations` increments ONLY on Explorer/Executor node runs (not Supervisor).
 # With MAX_ITERATIONS=3 any re-plan (Explorer→Executor→Explorer) hit the ceiling and
@@ -48,6 +50,9 @@ REVIEWER_MODEL = "gpt-4.1-mini"
 OLLAMA_MODEL      = "qwen2.5-coder:latest"
 OLLAMA_API_URL    = "https://192.116.98.6/api/generate"   # generate endpoint (Supervisor)
 OLLAMA_CHAT_URL   = "https://192.116.98.6/api/chat"       # chat endpoint (Executor ReAct)
-OLLAMA_AUTH_USER  = "group1"
-OLLAMA_AUTH_PASS  = "MTAgroup1"
+# Credentials come from the environment (.env), never from this file — a leaderboard
+# submission publishes the repo URL, and these were sitting here in plaintext.
+# Only needed when EXECUTOR_BACKEND == "ollama"; the OpenAI path never reads them.
+OLLAMA_AUTH_USER  = os.environ.get("OLLAMA_AUTH_USER", "")
+OLLAMA_AUTH_PASS  = os.environ.get("OLLAMA_AUTH_PASS", "")
 OLLAMA_TIMEOUT    = 240   # seconds per request

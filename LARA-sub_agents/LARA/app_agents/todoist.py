@@ -21,9 +21,9 @@ class TodoistExecutor(BaseAppExecutor):
 
 ⚠️ CALLING CONVENTION — call EVERY todoist API the same way:
      call_api('todoist', '<api_name>', token, **kwargs)
-   login: token = login_to_app('todoist')
+   login: token = login('todoist')
 
-🔑 THE TWO FIELD-NAME TRAPS (these cause most wrong answers):
+🔑 THE TWO FIELD-NAME TRAPS:
    1. A TASK's name field is **'title'**.  A PROJECT's name field is **'name'**.
       Never read task['name'] — it does not exist. Use task['title'].
    2. **priority is a STRING enum: 'high' | 'medium' | 'low'** (default 'medium').
@@ -38,14 +38,14 @@ class TodoistExecutor(BaseAppExecutor):
 ═══ EXACT API NAMES (wrong name = instant crash) ═══
 
   # Projects  (name field = 'name'; project_id=0 = Inbox)
-  show_projects(access_token, query='', is_favorite=None, is_archived=None, sort_by=None) → paginated
+  show_projects(access_token, query='', color=None, is_favorite=None, is_archived=None, sort_by=None) → paginated
   show_project(access_token, project_id)                → single project dict
   create_project(access_token, name, color='charcoal', description='', is_favorite=False) → {message, project_id}
   update_project / delete_project(access_token, project_id, ...)
 
   # Tasks  (title field = 'title'; priority = 'high'|'medium'|'low')
-  show_tasks(access_token, project_id, section_id=None, assignee_email=None, priority=None,
-             is_completed=None, due_today=False, overdue=False, label_id=None,
+  show_tasks(access_token, project_id, section_id=None, assignee_email=None, assigner_email=None,
+             priority=None, is_completed=None, due_today=False, overdue=False, label_id=None,
              min_due_date='1500-01-01', max_due_date='3000-01-01', sort_by='+order_index')
              → DICT (see above), NOT a flat list
   show_task(access_token, task_id)                      → {task_id, title, description, due_date,
@@ -82,37 +82,26 @@ class TodoistExecutor(BaseAppExecutor):
   max_due_date as 'YYYY-MM-DD'. Never compute dates with datetime.now().
 
 ═══ PAGINATION ═══
-  Paginated (5/page) — use fetch_all_pages:  show_projects, search_labels, search_users, show_notifications
+  Paginated (5/page) — use fetch_all_pages:  show_projects, search_labels, search_users,
+                                             show_task_comments, show_notifications
   NOT paginated — use call_api:  show_tasks (returns the nested dict), show_task, show_project,
                                  show_sections, show_sub_tasks
 
-═══ COMMON TASK PATTERNS ═══
-
-  "How many tasks are in my Groceries project?":
-    token    = login_to_app('todoist')
-    projects = fetch_all_pages('todoist', 'show_projects', token)
-    pid      = get_field(projects, 'name', 'Groceries', 'project_id')
-    data     = call_api('todoist', 'show_tasks', token, project_id=pid)
-    tasks    = data['no_section_tasks'] + [t for s in data['sections'] for t in s['tasks']]
-    apis.supervisor.complete_task(answer=str(len(tasks)))
-
-  "Add a task 'Buy milk' to my Inbox":
-    token = login_to_app('todoist')
-    call_api('todoist', 'create_task', token, project_id=0, title='Buy milk')
-    apis.supervisor.complete_task(answer=None)
-
-  "Mark the task 'Buy milk' as complete":
-    token = login_to_app('todoist')
-    data  = call_api('todoist', 'show_tasks', token, project_id=0)
-    tasks = data['no_section_tasks'] + [t for s in data['sections'] for t in s['tasks']]
-    tid   = get_field(tasks, 'title', 'Buy milk', 'task_id')
-    call_api('todoist', 'update_task', token, task_id=tid, is_completed=True)
-    apis.supervisor.complete_task(answer=None)
+═══ NAME → ID RESOLUTION ═══
+  Every todoist API takes ids, never names, so a name from the task must be resolved by a
+  list call first (get_field(items, <name_field>, <name>, <id_field>) does the lookup):
+    project name → 'project_id'  from fetch_all_pages('todoist', 'show_projects', token), match 'name'
+                                 (project_id 0 is the Inbox — no lookup needed)
+    task title   → 'task_id'     from the flattened show_tasks result, match 'title'
+    section name → 'section_id'  from call_api('todoist', 'show_sections', token, project_id=pid), match 'name'
+    label name   → 'label_id'    from fetch_all_pages('todoist', 'search_labels', token), match 'name'
+  A task named without a project may live in any project: list the projects and search each
+  one's flattened tasks rather than assuming the Inbox.
 
 ═══ CRITICAL RULES ═══
   • create / update / delete / assign / add_label / create_section / create_sub_task = ACTION tasks
     → apis.supervisor.complete_task(answer=None). NEVER pass a task_id or 'done'.
-  • "How many tasks / which task / what is the ..." = VALUE tasks → pass the computed value.
+  • A question ("how many", "which", "what is") = VALUE task → pass the computed value.
   • Task name = task['title']; Project name = project['name']. Never mix them up.
   • priority is the string 'high' / 'medium' / 'low' — never an integer.
   • show_tasks returns a dict — always flatten no_section_tasks + sections[].tasks before iterating.

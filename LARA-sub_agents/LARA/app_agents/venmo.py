@@ -20,7 +20,7 @@ class VenmoExecutor(BaseAppExecutor):
 
 ⚠️ CALLING CONVENTION — call EVERY venmo API the same way:
      call_api('venmo', '<api_name>', token, **kwargs)
-   login: token = login_to_app('venmo')
+   login: token = login('venmo')
    Paginated APIs → use fetch_all_pages. Non-paginated → call_api.
 
 ═══ EXACT API NAMES (wrong name = instant crash) ═══
@@ -34,7 +34,7 @@ class VenmoExecutor(BaseAppExecutor):
 
   # Transactions (money sent/received between users)
   show_transactions(access_token, query='', user_email=None,
-                    min_created_at=None, max_created_at=None,
+                    min_created_at=None, max_created_at=None,   ← 'YYYY-MM-DD' strings
                     min_amount=None, max_amount=None,
                     min_like_count=None, max_like_count=None,
                     private=None, direction=None,           ← 'sent' or 'received'
@@ -140,10 +140,11 @@ class VenmoExecutor(BaseAppExecutor):
   "deny / reject a payment request"          → deny_payment_request(payment_request_id=...)
 
 ═══ RECIPIENT LOOKUP ═══
-  Task names a person ("send money to my roommate Alice"):
-    contact = find_contact('Alice')     # phone-app contacts → returns email
+  Every venmo API identifies a person by email (receiver_email / user_email), never
+  by name. When the task refers to someone by name, resolve it first:
+    contact = fetch_all_pages('phone', 'search_contacts', login('phone'), query='Alice')[0]     # phone-app contacts → returns email
     receiver_email = contact['email']
-  Never guess an email — always look it up first.
+  Never guess or construct an email — always look it up first.
 
 ═══ PAYMENT SOURCE ═══
   By default, create_transaction draws from the Venmo balance.
@@ -163,44 +164,22 @@ class VenmoExecutor(BaseAppExecutor):
 
 ═══ COMMON TASK PATTERNS ═══
 
-  "Send $X to Alice for <reason>":
-    token = login_to_app('venmo')
-    contact = find_contact('Alice')
-    call_api('venmo', 'create_transaction', token,
-             receiver_email=contact['email'], amount=X, description='<reason>')
-    apis.supervisor.complete_task(answer=None)
+  Paying a person → resolve the name to an email (RECIPIENT LOOKUP), then
+  create_transaction(receiver_email=..., amount=..., description=...). A note or
+  reason stated in the task goes in description=; "privately" → private=True.
 
-  "How much money did I send to Alice total?":
-    token = login_to_app('venmo')
-    contact = find_contact('Alice')
-    txns = fetch_all_pages('venmo', 'show_transactions', token,
-                           user_email=contact['email'], direction='sent')
-    total = sum(t['amount'] for t in txns)
-    apis.supervisor.complete_task(answer=str(total))
+  Aggregating over transactions (a total, a sum of a field) → fetch_all_pages
+  show_transactions, then reduce in Python. Narrow with the documented filters
+  rather than by hand: user_email= for one counterparty, direction='sent'/'received'
+  (omit it when the task covers both), min_created_at=/max_created_at= for a date
+  bound. For several people, resolve every email and either query per email or
+  filter the full list on sender/receiver email.
 
-  "Approve the payment request from Bob":
-    token = login_to_app('venmo')
-    reqs = fetch_all_pages('venmo', 'show_received_payment_requests', token, status='pending')
-    contact = find_contact('Bob')
-    req = next(r for r in reqs if r['sender']['email'] == contact['email'])
-    call_api('venmo', 'approve_payment_request', token,
-             payment_request_id=req['payment_request_id'])
-    apis.supervisor.complete_task(answer=None)
-
-  "What is my Venmo balance?":
-    token = login_to_app('venmo')
-    bal = call_api('venmo', 'show_venmo_balance', token)
-    apis.supervisor.complete_task(answer=str(bal['venmo_balance']))
-
-  "Download the receipt for my transaction with Alice":
-    token = login_to_app('venmo')
-    contact = find_contact('Alice')
-    txns = fetch_all_pages('venmo', 'show_transactions', token,
-                           user_email=contact['email'])
-    tid = txns[0]['transaction_id']   # pick the relevant one
-    call_api('venmo', 'download_transaction_receipt', token,
-             transaction_id=tid)      # saves to ~/downloads by default
-    apis.supervisor.complete_task(answer=None)
+  Acting on payment requests → fetch_all_pages show_received_payment_requests with
+  status='pending', match r['sender']['email'] against the resolved email(s), then
+  approve_payment_request / deny_payment_request per match. Match against a SET of
+  emails and tolerate zero matches — never index or next() into a possibly empty
+  list.
 
 ═══ CRITICAL RULES ═══
   • Sending / requesting / approving / denying / liking / commenting are ACTION tasks

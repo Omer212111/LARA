@@ -13,6 +13,13 @@ from typing import Optional
 from langchain.tools import tool
 from appworld import AppWorld
 
+try:
+    from analysis import hardcode_trace
+except ImportError:      # dev-only tracer — a missing analysis/ must never break a run
+    class hardcode_trace:                                    # type: ignore[no-redef]
+        note = note_specialist = note_code_block = start_task = end_task = \
+            staticmethod(lambda *a, **k: None)
+
 
 # ---------------------------------------------------------------------------
 # Global environment handle (set from main.py / benchmark.py)
@@ -118,6 +125,12 @@ def explore_app_apis(app_name: str) -> str:
     """Returns the list of API methods and short descriptions for a specific application.
     Pass the app name as a simple lowercase string like 'spotify' or 'gmail'."""
     app_name = app_name.replace('"', '').replace("'", "").strip()
+    # Documentation discovery at runtime. Traced because the call string is built
+    # by our code, but this is the path AppWorld explicitly encourages ("read
+    # documentation, explore, experiment") — it is the OPPOSITE of baking the API
+    # list into a prompt, so its usage rate is the evidence that removing the
+    # specialists' API listings has somewhere to fall back to.
+    hardcode_trace.note("tools:explore_app_apis", detail=app_name)
     print(f"\n[ACTION] Fetching API docs for '{app_name}'...")
     code = f"print(apis.api_docs.show_api_descriptions(app_name='{app_name}'))"
     return _execute_code_raw(code)
@@ -144,6 +157,7 @@ def get_api_details(json_input: str) -> str:
     except Exception as e:
         return f"Error: Action Input must be valid JSON. Details: {e}"
 
+    hardcode_trace.note("tools:get_api_details", detail=f"{app_name}.{api_name}")
     print(f"\n[ACTION] Getting detailed docs for {app_name}.{api_name}...")
     code = f"print(apis.api_docs.show_api_doc(app_name='{app_name}', api_name='{api_name}'))"
     return _execute_code_raw(code)

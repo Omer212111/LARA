@@ -22,7 +22,7 @@ class FileSystemExecutor(BaseAppExecutor):
 
 ⚠️ CALLING CONVENTION — call EVERY file_system API the same way:
      call_api('file_system', '<api_name>', token, **kwargs)
-   login: token = login_to_app('file_system')
+   login: token = login('file_system')
    NONE of these APIs are paginated → always use call_api, never fetch_all_pages.
 
 ═══ PATHS ═══
@@ -90,12 +90,11 @@ class FileSystemExecutor(BaseAppExecutor):
 
 ═══ COMMON TASK PATTERNS ═══
 
-  COUNT files / find files by name or extension:
+  LIST / FILTER files:
     paths = call_api('file_system', 'show_directory', token,
                      directory_path='/', entry_type='files')   # recursive by default
-    txt = [p for p in paths if p.endswith('.txt')]
-    answer = len(txt)
     # filter by name fragment: pass substring='report' instead of post-filtering.
+    # filter by extension in Python: [p for p in paths if p.endswith('.txt')]
 
   READ a file's content:
     f = call_api('file_system', 'show_file', token, file_path='/notes/todo.txt')
@@ -121,9 +120,9 @@ class FileSystemExecutor(BaseAppExecutor):
     call_api('file_system','move_file',token,
              source_file_path='/a/old.txt', destination_file_path='/a/new.txt')
 
-  LARGEST / NEWEST file: show_directory gives only paths — there is no size in
-  the listing. Fetch each file with show_file and compare len(content) for
-  "largest", or created_at / updated_at for "newest / most recently modified".
+  FILE DATES: show_directory returns paths only — no dates, and no API here
+  reports a file size at all. When a task depends on when a file was created or
+  last changed, call show_file on each path and read created_at / updated_at.
 
 ═══ CRITICAL RULES ═══
   • show_directory → list[str]. Iterating it as dicts (x['type'], x['name']) CRASHES.

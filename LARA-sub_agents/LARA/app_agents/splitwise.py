@@ -22,7 +22,7 @@ class SplitwiseExecutor(BaseAppExecutor):
 
 ⚠️ CALLING CONVENTION — call EVERY splitwise API the same way:
      call_api('splitwise', '<api_name>', token, **kwargs)
-   login: token = login_to_app('splitwise')
+   login: token = login('splitwise')
    Paginated APIs → use fetch_all_pages. Balance/single-item APIs → call_api.
 
 ═══ BALANCES — the RIGHT way to answer "who owes whom" (do NOT sum expenses by hand) ═══
@@ -35,7 +35,8 @@ class SplitwiseExecutor(BaseAppExecutor):
         "person I owe the most" (filter direction=='you_owe_them', max by amount).
   show_person_balance(access_token, email)
       → {'direction', 'total', 'breakdown': [{'group_id','group_name','direction','amount'}]}
-      USE FOR: "how much do I owe Alice" / "does Alice owe me".
+      USE FOR: your net balance with ONE named person.
+      'total' is a MAGNITUDE (never negative); the sign lives in 'direction'.
   show_groups_balance(access_token)
       → {'you_owe_others','others_owe_you','breakdown':[{'group_id','group_name','you_owe_others','others_owe_you'}]}
       USE FOR: per-group aggregate balances.
@@ -46,14 +47,15 @@ class SplitwiseExecutor(BaseAppExecutor):
 
 ═══ SETTLING UP (ACTION — ledger only, no real money) ═══
   settle_up(access_token, email, group_id=None, description='Settle up balance.')
-      → {'message'}   USE FOR: "settle up with Alice" / "clear my balance with Bob".
+      → {'message'}   USE FOR: clearing an outstanding balance with one person.
       If the person is in a group and the task is about that group, pass group_id.
 
 ═══ RECORDING EXPENSES & PAYMENTS (ACTIONS) ═══
   record_expense(access_token, description, paid_amount, payer_email,
                  debtor_emails=[...], debt_amounts=[...] , group_id=None)
       → {'message','expense_id'}
-      • payer_email = who PAID (usually YOUR own email: apis.supervisor.show_profile()['email']).
+      • payer_email = who PAID. When that is the supervisor themselves, read it from
+        apis.supervisor.show_profile()['email'] — do not hard-code an address.
       • debtor_emails = everyone who owes a share (may include the payer for an even split).
       • debt_amounts OPTIONAL → if omitted, the amount is split EQUALLY among debtors.
         If passed, it MUST be the same length as debtor_emails.
@@ -82,8 +84,9 @@ class SplitwiseExecutor(BaseAppExecutor):
   add_member_to_group / remove_member_from_group / delete_group / update_group → ACTIONS
 
 ═══ FINDING A PERSON'S EMAIL ═══
-  Task names a person ("settle up with my roommate Alice"):
-      contact = find_contact('Alice')      # phone-app contacts → returns email
+  Every per-person splitwise API takes an EMAIL, never a name. If the task names a person,
+  resolve the name to an email first:
+      contact = fetch_all_pages('phone', 'search_contacts', login('phone'), query='Name')[0]      # phone-app contacts → returns email
       email   = contact['email']
   Never guess an email. (search_users(access_token, query=...) also finds splitwise users if needed.)
 
@@ -91,47 +94,33 @@ class SplitwiseExecutor(BaseAppExecutor):
   Paginated (5/page) — ALWAYS use fetch_all_pages:
     show_groups, show_activity, show_group_expenses, show_no_group_expenses,
     show_group_payments, show_no_group_payments, show_expense_comments,
-    show_payment_comments, search_users, show_notifications
+    search_users, show_notifications
   NOT paginated — use call_api:
-    show_expense, show_group, show_payment, show_person_balance, show_people_balance,
-    show_group_balance, show_groups_balance
+    show_expense, show_group, show_payment, show_payment_comments, show_person_balance,
+    show_people_balance, show_group_balance, show_groups_balance
 
-═══ COMMON TASK PATTERNS ═══
-
-  "How much do I owe Alice in total?":
-    token = login_to_app('splitwise')
-    email = find_contact('Alice')['email']
-    bal   = call_api('splitwise', 'show_person_balance', token, email=email)
-    # bal['direction'] tells you the sign; bal['total'] is the magnitude
-    apis.supervisor.complete_task(answer=str(bal['total']))
-
-  "Who owes me the most money?":
-    token = login_to_app('splitwise')
-    people = call_api('splitwise', 'show_people_balance', token)['breakdown']
-    owe_me = [p for p in people if p['direction'] == 'they_owe_you']
-    top    = max(owe_me, key=lambda p: p['amount'])
-    apis.supervisor.complete_task(answer=top['name'])
-
-  "Settle up with Bob":
-    token = login_to_app('splitwise')
-    email = find_contact('Bob')['email']
-    call_api('splitwise', 'settle_up', token, email=email)
-    apis.supervisor.complete_task(answer=None)
-
-  "I paid $60 for dinner, split evenly between me, Alice and Bob":
-    token = login_to_app('splitwise')
-    me    = apis.supervisor.show_profile()['email']
-    alice = find_contact('Alice')['email']; bob = find_contact('Bob')['email']
-    call_api('splitwise', 'record_expense', token, description='dinner',
-             paid_amount=60, payer_email=me, debtor_emails=[me, alice, bob])   # equal split
-    apis.supervisor.complete_task(answer=None)
+═══ PICKING THE RIGHT API FOR THE REQUEST ═══
+  Match the SHAPE of the request, not its wording:
+  • Balance with ONE named person → show_person_balance(email=...). Take the number from
+    'total' and the owed/owing direction from 'direction'.
+  • A "who …" or superlative question across people → show_people_balance()['breakdown']:
+    filter on 'direction' FIRST, then max/min on 'amount'. Never re-derive a balance by
+    summing expenses yourself.
+  • Per-group aggregates → show_groups_balance; member-to-member detail inside one group →
+    show_group_balance(group_id=...).
+  • Clearing what is outstanding with someone → settle_up. Recording a cost to be shared →
+    record_expense. Recording money already handed over → record_payment.
+  • Listing or filtering expenses → show_group_expenses (needs group_id) for grouped ones,
+    show_no_group_expenses for ungrouped ones; show_activity for both plus payments.
 
 ═══ CRITICAL RULES ═══
-  • record_expense / record_payment / settle_up / create_group / delete_* / update_* / add_member /
-    remove_member = ACTION tasks → apis.supervisor.complete_task(answer=None). NEVER pass an id or 'done'.
+  • record_expense / record_payment / settle_up / create_group / delete_* / update_* /
+    add_member_to_group / remove_member_from_group = ACTION tasks →
+    apis.supervisor.complete_task(answer=None). NEVER pass an id or 'done'.
   • Balance / total / count / "who owes ..." queries = VALUE tasks → pass the computed value.
-  • settle_up and record_payment are LEDGER ONLY — they do NOT move real money. A task like
-    "pay Alice back in Venmo and settle it in Splitwise" needs BOTH the venmo and splitwise apps.
+  • settle_up and record_payment are LEDGER ONLY — they do NOT move real money. If the request
+    also requires money to actually move, that half belongs to a payment app; doing it only in
+    splitwise leaves the request half-finished.
   • Per-person owed amount lives in show_expense()['shares'][i]['debt_amount'] — not a top-level field.
   • debt_amounts (if given) must match debtor_emails length; omit it for an equal split.
   • expense_id, group_id, and payment_id are DISTINCT — never pass one where another is expected.

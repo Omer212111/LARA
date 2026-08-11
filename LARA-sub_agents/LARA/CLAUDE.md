@@ -53,13 +53,35 @@ This is the key abstraction. [app_agents/base.py](app_agents/base.py) defines `A
 1. Parses the Explorer's numbered plan, mapping each step to a specialist whose `app_name` appears in that step's text.
 2. Swaps in that specialist's system prompt for the LLM call (falls back to generic `REACT_EXECUTOR_SYSTEM` for multi-app glue steps).
 
-Specialists ([app_agents/](app_agents/)) are thin `BaseAppExecutor` subclasses that only set `app_name` + `app_system_prompt` — a large, hand-tuned block of exact API names, field names, calling conventions, and task patterns. They are registered in the `_orchestrator` dict in [executor.py](executor.py). Currently: spotify, gmail, amazon, file_system.
+Specialists ([app_agents/](app_agents/)) are thin `BaseAppExecutor` subclasses that only set `app_name` + `app_system_prompt` — a hand-written block of exact API names, field names and calling conventions. They are registered in the `_orchestrator` dict in [executor.py](executor.py). Currently: amazon, api_docs, file_system, gmail, phone, simple_note, splitwise, spotify, todoist, venmo.
 
 **When editing a specialist prompt, verify every API/field name against `data/api_docs/standard/<app>.json`** — these JSON files are the ground truth. Wrong names crash the sandbox.
 
+**And check provenance before you add a task pattern.** A hint is only legal if it came
+from a train or dev failure. The permitted evidence base covers **five apps only** —
+spotify (78 tasks), venmo (39), phone (18), file_system (18), simple_note (15). There are
+**zero** train/dev tasks for amazon, gmail, todoist and splitwise, so a task-shaped claim
+in one of those four prompts cannot have a legal origin and must not be added. API and
+field documentation is always fine; a quoted task wording with a worked solution is not.
+`analysis/hardcode_coverage.py` and the audit in
+`analysis/HARDCODE-INVENTORY-2026-08-10.md` record how this was measured.
+
 ### Bootstrap helpers
 
-[executor_helpers.py](executor_helpers.py) defines `BOOTSTRAP_CODE`, prepended to **every** code block the Executor runs. It provides in-scope helpers — `login_to_app`, `call_api`, `fetch_all_pages`, `filter_results`, `find_contact`, etc. Specialist prompts should instruct the model to use these (e.g. `call_api('gmail', 'show_thread', token, ...)`).
+[executor_helpers.py](executor_helpers.py) defines `BOOTSTRAP_CODE`, prepended to **every** code block the Executor runs. It provides in-scope helpers — `call_api`, `fetch_all_pages`, `filter_results`, `get_field`, `sort_by`, plus the ledger accessors. Specialist prompts should instruct the model to use these (e.g. `call_api('gmail', 'show_thread', token, ...)`).
+
+**Nothing in `BOOTSTRAP_CODE` may call a concrete AppWorld endpoint.** `call_api` and
+`fetch_all_pages` take the app and API name as arguments, so they hardcode no endpoint;
+the rest touch no API at all. Two helpers that *did* — `login_to_app` (supervisor
+credentials + `<app>.login`) and `find_contact` (`phone.search_contacts`) — were removed
+on 2026-08-10, because AppWorld's rules forbid "hardcod[ing] any API calls into their
+agent's logic" and name the login case explicitly. Authentication moved to the prompt,
+which the same rules permit: [prompts_executor.py](prompts_executor.py) tells the model to
+define its own caching `login(app)` in its first code block, and the sandbox's
+single long-lived shell keeps it alive for the rest of the task. `AppOrchestrator.node`
+re-injects that definition if a step NameErrors on it.
+
+If you add a helper here, it must pass the same test: no endpoint named in our code.
 
 ## Critical correctness rules
 

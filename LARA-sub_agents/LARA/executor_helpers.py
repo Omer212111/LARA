@@ -5,13 +5,34 @@ BOOTSTRAP_CODE is prepended to every code block the Executor runs.
 These functions handle the most common AppWorld patterns so Qwen writes minimal code.
 
 Available helpers (always in scope inside generated code):
-  login_to_app(app_name)                              → access_token (cached in the ledger)
   call_api(app_name, api_name, token, **kwargs)       → API response (dict/list) — single call only
   fetch_all_pages(app_name, api_name, token, **kwargs)→ ALL pages merged — use for listing APIs!
   filter_results(items, field, value, partial=False)  → filtered list
   get_field(items, mf, mv, rf, default=None)          → single field value
   sort_by(items, field, reverse=False)                → sorted list
-  find_contact(name)                                  → contact dict or None
+
+Deliberately NOT provided here (see prompts_executor.py::REACT_EXECUTOR_SYSTEM)
+------------------------------------------------------------------------------
+`login_to_app` and `find_contact` used to live in this file. Both called concrete
+AppWorld endpoints from our own code — supervisor.show_account_passwords + <app>.login,
+and phone.search_contacts / phone.show_contacts — which is what the AppWorld rules
+mean by "hardcode any API calls into their agent's logic"; the login case is the
+example the rule itself gives, right down to caching the token in a variable.
+
+The capability is not gone, it moved. The rules explicitly allow "tell the agent in
+the prompt to do so by itself", so REACT_EXECUTOR_SYSTEM now instructs the model to
+define its own caching `login()` in its first code block. The sandbox is one
+long-lived shell per task (see below), so that definition survives every later step
+and the ergonomics are unchanged — `token = login('venmo')` either way, but the model
+authored it.
+
+`find_contact` needed no replacement: it was measured at 0 uses across 20 tasks,
+including 9 tasks about roommates, siblings and coworkers. The specialist prompts now
+name the phone API directly instead.
+
+The helpers that remain make no hardcoded API call. call_api and fetch_all_pages are
+generic dispatchers — the app and endpoint arrive as arguments — and the rest are pure
+data manipulation over lists and dicts.
 
 Cross-app ledger (persists across ReAct steps AND across Executor attempts):
   remember(key, value) / recall(key, default)         → arbitrary intermediate values
@@ -109,27 +130,6 @@ def ledger_summary():
     return "\\n".join(lines)
 
 
-def login_to_app(app_name):
-    """Login to any AppWorld app. Returns access_token string.
-    Handles credential lookup + login automatically.
-    Most apps authenticate by email; the phone app uses phone_number as the username.
-    Tokens are cached in the ledger, so calling this again in a later step is free —
-    it costs no API round-trip."""
-    cached = _lara_store()["tokens"].get(app_name)
-    if cached:
-        return cached
-    profile = apis.supervisor.show_profile()
-    username = profile['phone_number'] if app_name == 'phone' else profile['email']
-    accounts = apis.supervisor.show_account_passwords()
-    cred = next((a for a in accounts if a['account_name'] == app_name), None)
-    if not cred:
-        raise ValueError(f"No credentials found for app '{app_name}'")
-    result = getattr(apis, app_name).login(username=username, password=cred['password'])
-    token = result['access_token']
-    _lara_store()["tokens"][app_name] = token
-    return token
-
-
 def call_api(app_name, api_name, token, **kwargs):
     """Call any AppWorld API with access_token injected.
     Works for both read and write/update operations.
@@ -208,27 +208,6 @@ def sort_by(items, field, reverse=False):
     Example: top = sort_by(songs, 'like_count', reverse=True)[0]"""
     return sorted(items, key=lambda x: (x.get(field) or 0), reverse=reverse)
 
-
-def find_contact(name):
-    """Look up a person by name in the phone app contacts.
-    Handles roommates, coworkers, friends, siblings — any relationship-based lookup.
-    Returns the full contact dict (has 'email', 'phone_number', etc.) or None.
-    Example: contact = find_contact('Alice')
-             email   = contact['email']"""
-    token = login_to_app('phone')
-    name_lower = name.lower()
-    # Try dedicated search API first (faster)
-    try:
-        results = apis.phone.search_contacts(access_token=token, query=name)
-        if results:
-            return results[0]
-    except Exception:
-        pass
-    # Fallback: fetch all contacts and filter by name substring
-    all_contacts = apis.phone.show_contacts(access_token=token)
-    matches = [c for c in all_contacts
-               if name_lower in str(c.get('name') or c.get('full_name') or '').lower()]
-    return matches[0] if matches else None
 
 # ─────────────────────────────────────────────────────────────────────────────
 '''
