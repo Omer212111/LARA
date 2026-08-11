@@ -141,7 +141,7 @@ SEMANTIC API SELECTION — common task patterns:
 
   ⚠️ NEVER hardcode product_id / payment_card_id / address_id in a plan step — they must be
      looked up at runtime. NEVER add an unrelated app (e.g. phone) unless the task names a person.
-  ⚠️ search_sellers returns only {seller_id, name} — it carries NO rating. Use it to turn a
+  ⚠️ search_sellers returns only {{seller_id, name}} — it carries NO rating. Use it to turn a
      seller name into an id, then show_seller(seller_id) for the rating.
 
   AMAZON FIELD TRAPS:

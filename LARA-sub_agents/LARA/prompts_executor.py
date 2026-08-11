@@ -8,6 +8,12 @@ Split from the former single prompts.py so the Explorer and Executor prompt
 surfaces have separate owners and stop colliding in merges. The Explorer's
 counterpart is prompts_explorer.py; nothing is shared between them.
 
+Tried and reverted (2026-08-11): a line telling the model to continue plan step 1
+in the SAME block as the login() definition. The motivation was real — 44% of
+step-1 blocks on broad-20 contained the definition and nothing else — but the
+measurement did not follow: ReAct steps went 154 -> 158 and the slice scored 10/20
+against 13/20 without it. Do not re-add it without a run that shows a saving.
+
 The legacy EXECUTOR_SYSTEM_TEMPLATE (single-shot, pre-ReAct) was dropped in the
 split — it had no remaining importers.
 """
@@ -32,10 +38,6 @@ Your FIRST code block must start with exactly this, copied verbatim:
       user = prof['phone_number'] if app == 'phone' else prof['email']
       TOKENS[app] = getattr(apis, app).login(username=user, password=pw)['access_token']
       return TOKENS[app]
-
-  Then KEEP GOING in the SAME code block — do the real work of plan step 1 underneath
-  the definition. Do not spend a whole ReAct step on the definition alone; you have a
-  limited number of steps and this one costs you nothing to combine.
 
   The sandbox is ONE long-lived Python shell for the whole task, so `login` and
   `TOKENS` stay defined for every later step. Define them once, in step 1, and never
