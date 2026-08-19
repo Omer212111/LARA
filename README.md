@@ -33,22 +33,3 @@ Quick map:
 | [`executor_helpers.py`](LARA-sub_agents/LARA/executor_helpers.py) | Generic helpers injected into every code block |
 | [`analysis/`](LARA-sub_agents/LARA/analysis/) | Measurement tooling and the hardcode-compliance audit |
 
-## Compliance with the AppWorld rules
-
-AppWorld forbids hardcoding API calls into the agent's own logic, and forbids
-learning anything from the test splits. Both were audited and fixed on 2026-08-10:
-
-- `login_to_app` and `find_contact` — helpers that called concrete endpoints from
-  our code — were removed. Authentication moved into the prompt, which the rules
-  explicitly permit ("tell the agent in the prompt to do so by itself").
-- Canned Amazon plans and an ACTION-task regex over the task text were deleted.
-  Coverage measurement showed they matched **zero** train/dev tasks and only
-  test_challenge ones, so they could not have had a legal origin.
-
-Verified by AST analysis: **zero `apis.*` calls in live code**. Every remaining
-mention sits inside a prompt string.
-
-Full audit:
-[`analysis/HARDCODE-INVENTORY-2026-08-10.md`](LARA-sub_agents/LARA/analysis/HARDCODE-INVENTORY-2026-08-10.md)
-
-Removing the hardcode *improved* the score — `test_normal` went from 54.8 to 61.9.
