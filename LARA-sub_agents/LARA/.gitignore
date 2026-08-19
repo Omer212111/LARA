@@ -35,3 +35,13 @@ analysis/runs/**/*.log
 analysis/runs/**/*.run_log.html
 # Timestamped docx backups written by append_docx_log.py / rewrite_docx_sections.py
 *.backup-*.docx
+
+# Run artifacts and internal working docs — not part of the submitted agent.
+# Kept on disk, just not tracked: they are outputs and process notes, and a
+# reviewer landing here should see the code, not a run log.
+run_log.html
+LARA Agent Log.html
+LARA Agent Log.pdf
+RUN_TEST_CHALLENGE.md
+SUBMIT_LEADERBOARD.md
+*.docx
