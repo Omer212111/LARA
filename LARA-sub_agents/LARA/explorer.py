@@ -80,7 +80,11 @@ def _call_gpt_explorer(user_input: str, task_text: str = "") -> str:
     """
     from tools import explore_app_apis, get_api_details
 
-    client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+    client = OpenAI(
+        api_key=os.environ.get("OPENAI_API_KEY"),
+        base_url=os.environ.get("OPENAI_BASE_URL") or None,
+    )
+    explorer_model = os.environ.get("EXPLORER_MODEL", EXPLORER_MODEL)
 
     # ── Pre-injection: run explore_app_apis for all detected apps ─────────────
     detected_apps = _detect_apps(task_text or user_input)
@@ -111,7 +115,7 @@ def _call_gpt_explorer(user_input: str, task_text: str = "") -> str:
     for round_num in range(10):
         tool_choice = "required" if round_num == 0 else "auto"
         response = client.chat.completions.create(
-            model=EXPLORER_MODEL,
+            model=explorer_model,
             messages=messages,
             tools=EXPLORER_TOOLS_OPENAI,
             tool_choice=tool_choice,
@@ -155,7 +159,7 @@ def _call_gpt_explorer(user_input: str, task_text: str = "") -> str:
     # Rounds exhausted or repeated-call break — force the model to write the plan now
     logger.warning("Explorer: forcing final plan generation (tool_choice=none)")
     forced = client.chat.completions.create(
-        model=EXPLORER_MODEL,
+        model=explorer_model,
         messages=messages,
         tools=EXPLORER_TOOLS_OPENAI,
         tool_choice="none",
@@ -169,7 +173,8 @@ def _call_gpt_explorer(user_input: str, task_text: str = "") -> str:
 
 def explorer_node(state: AgentState) -> dict:
     run_num = state.get("explorer_runs", 0) + 1
-    logger.phase(f"🔍 Explorer — GPT-4.1-nano (run {run_num})")
+    explorer_model = os.environ.get("EXPLORER_MODEL", EXPLORER_MODEL)
+    logger.phase(f"🔍 Explorer — {explorer_model} (run {run_num})")
 
     task          = state["messages"][0].content
     last_error    = state.get("last_error", "")

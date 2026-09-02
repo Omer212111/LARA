@@ -93,9 +93,14 @@ class CustomOllamaLLM(LLM):
 # ── OpenAI (GPT-4.1-nano) ─────────────────────────────────────────────────────
 
 class OpenAILLM(LLM):
-    """Thin wrapper around OpenAI chat completions — kept for LangChain compatibility."""
+    """Thin wrapper around OpenAI chat completions — kept for LangChain compatibility.
+
+    base_url defaults to "" (official OpenAI endpoint). Set OPENAI_BASE_URL to point
+    this at any OpenAI-compatible proxy (e.g. a LiteLLM gateway) instead.
+    """
     model:       str   = EXPLORER_MODEL
     api_key:     str   = ""
+    base_url:    str   = ""
     temperature: float = 0.1
     max_tokens:  int   = 2000
 
@@ -105,7 +110,10 @@ class OpenAILLM(LLM):
 
     def _call(self, prompt: str, stop: Optional[List[str]] = None, **kwargs: Any) -> str:
         from openai import OpenAI
-        client = OpenAI(api_key=self.api_key or os.environ.get("OPENAI_API_KEY", ""))
+        client = OpenAI(
+            api_key=self.api_key or os.environ.get("OPENAI_API_KEY", ""),
+            base_url=self.base_url or os.environ.get("OPENAI_BASE_URL") or None,
+        )
         try:
             response = client.chat.completions.create(
                 model=self.model,
@@ -130,17 +138,19 @@ def get_llm() -> CustomOllamaLLM:
 
 
 def get_executor_llm() -> OpenAILLM:
-    """Returns the Executor LLM (GPT-4.1-nano). Higher max_tokens for code generation."""
+    """Returns the Executor LLM (GPT-4.1-nano, or OPENAI_BASE_URL/EXECUTOR_MODEL override). Higher max_tokens for code generation."""
     return OpenAILLM(
         model=os.environ.get("EXECUTOR_MODEL", EXECUTOR_MODEL_OPENAI),
         api_key=os.environ.get("OPENAI_API_KEY", ""),
+        base_url=os.environ.get("OPENAI_BASE_URL", ""),
         max_tokens=4000,
     )
 
 
 def get_explorer_llm() -> OpenAILLM:
-    """Returns the Explorer LLM (GPT-4.1-nano via OpenAI)."""
+    """Returns the Explorer LLM (GPT-4.1-nano via OpenAI, or OPENAI_BASE_URL/EXPLORER_MODEL override)."""
     return OpenAILLM(
         model=os.environ.get("EXPLORER_MODEL", EXPLORER_MODEL),
         api_key=os.environ.get("OPENAI_API_KEY", ""),
+        base_url=os.environ.get("OPENAI_BASE_URL", ""),
     )

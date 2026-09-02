@@ -23,7 +23,11 @@ def main():
 
     logger.task_header(task_id, 1, len(task_ids))
 
-    with AppWorld(task_id=task_id, experiment_name=experiment_name) as world:
+    # timeout_seconds=None: appworld's default per-call timeout uses signal.alarm(),
+    # which requires the main thread. LangGraph's sync invoke() always dispatches nodes
+    # through a ThreadPoolExecutor, so the signal-based timeout crashes every code block
+    # regardless of LLM backend. MAX_REACT_STEPS already bounds a runaway task.
+    with AppWorld(task_id=task_id, experiment_name=experiment_name, timeout_seconds=None) as world:
         set_appworld_env(world)
 
         instruction = get_current_task_instruction()

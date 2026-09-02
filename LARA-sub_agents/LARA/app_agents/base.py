@@ -204,9 +204,12 @@ def _llm_call(messages: list[dict]) -> str:
     """Call the configured LLM backend. Returns assistant text."""
     if EXECUTOR_BACKEND == "openai":
         from openai import OpenAI
-        client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY", ""))
+        client = OpenAI(
+            api_key=os.environ.get("OPENAI_API_KEY", ""),
+            base_url=os.environ.get("OPENAI_BASE_URL") or None,
+        )
         response = client.chat.completions.create(
-            model=EXECUTOR_MODEL_OPENAI,
+            model=os.environ.get("EXECUTOR_MODEL", EXECUTOR_MODEL_OPENAI),
             messages=messages,
             temperature=0.1,
             max_tokens=1500,
@@ -376,7 +379,7 @@ class AppOrchestrator(BaseAppExecutor):
         attempt_num = state.get("executor_runs", 0) + 1
         backend_label = (
             f"{EXECUTOR_BACKEND}:"
-            f"{EXECUTOR_MODEL_OLLAMA if EXECUTOR_BACKEND == 'ollama' else EXECUTOR_MODEL_OPENAI}"
+            f"{EXECUTOR_MODEL_OLLAMA if EXECUTOR_BACKEND == 'ollama' else os.environ.get('EXECUTOR_MODEL', EXECUTOR_MODEL_OPENAI)}"
         )
         logger.phase(f"⚙️  Executor/Orchestrator (attempt {attempt_num}, {backend_label})")
 

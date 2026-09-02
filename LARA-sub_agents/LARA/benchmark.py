@@ -85,7 +85,10 @@ def run_official_benchmark(num_tasks=5, dataset="train", task_ids=None):
         passed, total, pct = 0, "?", 0
         fail_reqs = []
 
-        with AppWorld(task_id=task_id, experiment_name=experiment_name) as world:
+        # timeout_seconds=None: see main.py — appworld's signal.alarm()-based timeout
+        # requires the main thread, but LangGraph's sync invoke() always runs nodes
+        # through a ThreadPoolExecutor. MAX_REACT_STEPS already bounds a runaway task.
+        with AppWorld(task_id=task_id, experiment_name=experiment_name, timeout_seconds=None) as world:
             set_appworld_env(world)
 
             supervisor = world.task.supervisor
