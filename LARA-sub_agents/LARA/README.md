@@ -5,8 +5,10 @@ LARA solves tasks in **AppWorld** by writing Python. Given an instruction like
 have no Venmo account"*, it discovers the right APIs, writes a plan, then writes
 and runs code against those APIs until the task is done.
 
-**Current held-out score: TGC 61.9 / SGC 50.0** on `test_normal`
-(104/168 tasks, commit `3eb7770`).
+**Held-out leaderboard score: TGC 88.7 / SGC 82.1** on `test_normal` and
+**TGC 85.6 / SGC 77.0** on `test_challenge`, using `claude-opus-4-7` —
+[2nd place](https://appworld.dev/leaderboard) on the AppWorld leaderboard.
+The same code on `gpt-4.1-mini` scores 61.9 / 50.0 and 37.6 / 20.1.
 
 ---
 
@@ -28,7 +30,7 @@ right state, checked by unit tests — not that the agent claimed success. Calli
 
 **Tasks span apps.** A single task may read a CSV from FileSystem, look up people in
 Phone, pay via Venmo, and file the rest in Splitwise. Difficulty scales with that:
-our score is 91.2 on difficulty-1 tasks and 42.9 on difficulty-3.
+on `test_normal` we score 98.2 on difficulty-1 tasks and 79.4 on difficulty-3.
 
 Two metrics matter:
 - **TGC** (Task Goal Completion) — % of individual tasks solved.

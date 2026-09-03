@@ -1,31 +1,164 @@
 # LARA — a multi-agent coding agent for AppWorld
 
-LARA solves [AppWorld](https://appworld.dev) tasks by writing Python. Given an
+**🥈 2nd place on the [AppWorld leaderboard](https://appworld.dev/leaderboard)** —
+TGC 85.6 on the `test_challenge` split.
+
+LARA solves [AppWorld](https://appworld.dev) tasks by **writing Python**. Given an
 instruction like *"pay each person in debt_list.csv via Venmo, or file a Splitwise
 expense if they have no Venmo account"*, it discovers the right APIs, writes a plan,
-then writes and runs code against those APIs until the task is done.
+then writes and runs real code against those APIs until the world's database is in
+the state the task asked for.
+
+---
+
+## The problem
+
+[AppWorld](https://appworld.dev) (ACL 2024) is a benchmark of ~11 simulated apps —
+Spotify, Gmail, Amazon, Venmo, Splitwise, Todoist, SimpleNote, Phone, FileSystem,
+plus a Supervisor app holding the user's own accounts and credentials.
+
+Three properties make it genuinely hard, and each one shaped a piece of LARA's design:
+
+**It is a coding benchmark, not a tool-calling one.** The agent writes Python into a
+sandboxed REPL — loops, conditionals, data wrangling across API responses. There is
+no fixed tool schema to fill in, so the model has to get both the *logic* and the
+*exact API surface* right at the same time.
+
+**Grading is database-state based.** Passing means the world's database ends in the
+correct state, verified by unit tests. Claiming success proves nothing: an agent that
+calls `complete_task()` after doing the wrong thing scores zero. This punishes
+confident hallucination far more than hesitation.
+
+**Tasks span multiple apps.** One task may read a CSV from FileSystem, look up people
+in Phone, pay via Venmo, and file the remainder in Splitwise. The information needed
+to finish is scattered across apps, and no single API response holds a whole row.
+
+Two metrics are reported. **TGC** (Task Goal Completion) is the share of individual
+tasks solved. **SGC** (Scenario Goal Completion) is the share of *scenarios* where
+every variant was solved — much stricter, and the one that punishes inconsistency.
+
+---
 
 ## Results
 
-| split | tasks | Task Goal Completion | Scenario Goal Completion |
+| split | tasks | TGC | SGC |
 |---|---|---|---|
 | `test_normal` | 168 | **88.7** | **82.1** |
 | `test_challenge` | 417 | **85.6** | **77.0** |
 
-One Executor attempt per task, `claude-opus-4-7` served over an
-OpenAI-compatible LiteLLM gateway, scored with `appworld` 0.1.3.post1.
+Held-out test splits, one Executor attempt per task, scored with the official
+`appworld evaluate`. On `test_challenge` this places LARA **2nd of 24 entries**.
 
-An earlier run of the same method on `gpt-4.1-mini` scored 61.9 / 50.0 on
-`test_normal` and 37.6 / 20.1 on `test_challenge`.
+Because the method is the same across both, the pair below isolates how much of the
+score is the architecture and how much is the underlying model:
+
+| LLM | `test_normal` TGC | `test_challenge` TGC |
+|---|---|---|
+| `claude-opus-4-7` | 88.7 | 85.6 |
+| `gpt-4.1-mini` | 61.9 | 37.6 |
+
+The same scaffold carries a mid-size model to 61.9 and a frontier model to 88.7. The
+gap is widest on `test_challenge`, where tasks are longest and a single wrong API
+guess ends the run.
+
+---
+
+## How LARA works
+
+Four agents pass one shared state object around a
+[LangGraph](https://langchain-ai.github.io/langgraph/) `StateGraph`:
+
+```
+            ┌──────────────┐
+            │  Supervisor  │  routing only: Explorer / Executor / FINISH
+            └──────┬───────┘
+        ┌──────────┴──────────┐
+        ▼                     ▼
+  ┌──────────┐          ┌──────────┐        ┌──────────┐
+  │ Explorer │─────────▶│ Executor │───────▶│ Reviewer │
+  └──────────┘   plan   └──────────┘  wrong └────┬─────┘
+   reads API docs        ReAct loop:     answer  │ diagnosis
+   writes numbered       write code,             │
+   [app]-tagged plan     run, observe   ◀────────┘  (disabled — see below)
+```
+
+### 1. Separate discovery from execution
+
+The Explorer never runs code. Its only job is to read the API docs and find the
+**real** endpoint and field names, then write a numbered plan where every step is
+tagged with the app it belongs to:
+
+```
+1. [file_system] Read debt_list.csv and parse the rows.
+   OUT: debts[] {name, email, amount, description}
+2. [venmo] FOR EACH debts[]: search_users to find a Venmo account.
+   IN:  debts[]
+   OUT: debts[].venmo_id
+3. [venmo] FOR EACH debts[] WHERE venmo_id != null: send the payment.
+   OUT: debts[].paid, debts[].txn_id
+```
+
+This split exists because the dominant failure mode of a single-agent loop is
+*inventing* an endpoint that sounds plausible and burning the run on it. Forcing a
+docs-reading pass before any code is written removes most of that class.
+
+The `IN:`/`OUT:` annotations declare data flow explicitly, so the Executor is told
+which facts to carry forward instead of inventing its own bookkeeping.
+
+### 2. Swap the prompt per app, not per task
+
+The `[app]` tag drives **specialist dispatch**. The Executor runs a ReAct loop —
+write one small code block, run it, read the output, decide the next step — but at
+each step it swaps in a different system prompt depending on which app that step
+targets.
+
+Each of the 10 specialists (`app_agents/<app>.py`) contributes only an `app_name` and
+an `app_system_prompt`: a hand-written block of that app's exact API names, field
+names, and calling conventions. The model sees Venmo's conventions while working on a
+Venmo step, and Splitwise's on the next — instead of one prompt trying to hold all 11
+apps at once.
+
+### 3. Give cross-app joins somewhere to live
+
+Multi-app tasks are database joins. The CSV gives a name and an amount, Venmo gives a
+user id, Splitwise gives a group id — and no single app holds the whole row.
+
+Without somewhere to put it, that table exists only as printed stdout, so the model
+re-derives it at every step and loses it entirely between attempts. LARA puts a dict
+in the sandbox namespace instead. The AppWorld sandbox is one long-lived IPython shell
+per task, so it survives every `execute()` — including exceptions:
+
+```python
+remember_entity('Andrew', amount=42.50)          # from the CSV
+remember_entity('Andrew', venmo_id=118)          # from Venmo
+recall_entity('Andrew')['venmo_id']              # the join, as a lookup
+```
+
+Measured adoption on multi-app tasks: the model uses it in ~82% of attempts.
+
+### 4. Cut what does not pay for itself
+
+The Reviewer diagnoses a wrong answer so the Executor can retry. It is **disabled**.
+
+Measured over 165 tasks, it fired 75 times and rescued 1. A retry costs a Reviewer
+call plus a full second Executor attempt — roughly 45% more compute for a 1.3%
+conversion rate. The leaderboard runs use exactly **one Executor attempt per task**
+(`MAX_EXECUTOR_RUNS = 1`, `ENABLE_REVIEWER_RETRY = False`).
+
+The code is kept, and the measurement that closed it is recorded in
+[`config.py`](LARA-sub_agents/LARA/config.py), so the decision can be revisited if a
+retry mechanism ever demonstrates it converts on train/dev.
+
+---
 
 ## Reproducing the leaderboard run
 
-`config.py` defaults to `gpt-4.1-mini`. The leaderboard run used
-`claude-opus-4-7` served over an OpenAI-compatible LiteLLM gateway, selected at
-run time through environment overrides rather than by editing the defaults:
+`config.py` defaults to `gpt-4.1-mini`. The leaderboard run selected
+`claude-opus-4-7` at run time through environment overrides rather than by editing
+the defaults:
 
 ```bash
-export OPENAI_BASE_URL=<litellm-gateway-url>   # OpenAI-compatible endpoint
+export OPENAI_BASE_URL=<litellm-gateway-url>   # any OpenAI-compatible endpoint
 export OPENAI_API_KEY=<gateway-key>
 export EXECUTOR_MODEL=claude-opus-4-7
 export EXPLORER_MODEL=claude-opus-4-7
@@ -42,23 +175,18 @@ appworld evaluate lara_test_normal    test_normal
 appworld evaluate lara_test_challenge test_challenge
 ```
 
-Without the `EXECUTOR_MODEL` / `EXPLORER_MODEL` / `OPENAI_BASE_URL` overrides the
-same commands run on `gpt-4.1-mini` and reproduce the earlier 61.9 / 37.6 result
-instead.
+Without the overrides the same commands run on `gpt-4.1-mini` and reproduce the
+61.9 / 37.6 result instead. Both splits were run back to back through the same
+entrypoint with no code changes between them, scored with `appworld` 0.1.3.post1.
 
-Single attempt per task is enforced in [`config.py`](LARA-sub_agents/LARA/config.py):
-`MAX_EXECUTOR_RUNS = 1` and `ENABLE_REVIEWER_RETRY = False` — the Reviewer and the
-Supervisor retry path are both closed. Both splits were run back to back through the
-same entrypoint with no code changes between them.
+---
 
 ## Where the code is
 
 Everything lives under **[`LARA-sub_agents/LARA/`](LARA-sub_agents/LARA/)**.
 
 **Start here:** [`LARA-sub_agents/LARA/README.md`](LARA-sub_agents/LARA/README.md) —
-what AppWorld is, how the four agents work, and what every file does.
-
-Quick map:
+the full file map, the state object, and what every module does.
 
 | path | what it is |
 |---|---|
@@ -66,8 +194,12 @@ Quick map:
 | [`explorer.py`](LARA-sub_agents/LARA/explorer.py) | Discovery agent — reads API docs, writes the plan |
 | [`app_agents/base.py`](LARA-sub_agents/LARA/app_agents/base.py) | The ReAct executor loop and per-app specialist dispatch |
 | [`app_agents/`](LARA-sub_agents/LARA/app_agents/) | One specialist per app (spotify, venmo, gmail, …) |
-| [`executor_helpers.py`](LARA-sub_agents/LARA/executor_helpers.py) | Generic helpers injected into every code block |
+| [`executor_helpers.py`](LARA-sub_agents/LARA/executor_helpers.py) | The cross-app ledger and helpers injected into every code block |
+| [`config.py`](LARA-sub_agents/LARA/config.py) | Runtime limits, model selection, retry switches |
+| [`run_leaderboard.py`](LARA-sub_agents/LARA/run_leaderboard.py) | Entrypoint used for the held-out leaderboard runs |
 | [`analysis/`](LARA-sub_agents/LARA/analysis/) | Measurement tooling and the hardcode-compliance audit |
+
+---
 
 ## Compliance with the AppWorld rules
 
