@@ -41,25 +41,66 @@ every variant was solved — much stricter, and the one that punishes inconsiste
 
 ## Results
 
-| split | tasks | TGC | SGC |
-|---|---|---|---|
-| `test_normal` | 168 | **88.7** | **82.1** |
-| `test_challenge` | 417 | **85.6** | **77.0** |
+| agent | model | split | tasks | TGC | SGC |
+|---|---|---|---|---|---|
+| **LARA** | `claude-opus-4-7` | `test_normal` | 168 | **88.7** | **82.1** |
+| **LARA** | `claude-opus-4-7` | `test_challenge` | 417 | **85.6** | **77.0** |
 
 Held-out test splits, one Executor attempt per task, scored with the official
 `appworld evaluate`. On `test_challenge` this places LARA **2nd of 24 entries**.
 
-Because the method is the same across both, the pair below isolates how much of the
-score is the architecture and how much is the underlying model:
+### Against the official baseline
 
-| LLM | `test_normal` TGC | `test_challenge` TGC |
+AppWorld ships a reference agent — the minimal ReAct loop from its own prompt
+template, with no planning stage, no per-app knowledge and no cross-app memory. Run
+on `test_normal` under identical conditions (one attempt per task, 16 steps), it is
+the starting point LARA was built from:
+
+| agent | model | TGC | SGC | d1 | d2 | d3 |
+|---|---|---|---|---|---|---|
+| official baseline | `gpt-4.1-mini` | 23.2 | 7.1 | 47.4 | 18.8 | 4.8 |
+| official baseline | `claude-opus-4-7` | 54.8 | 46.4 | 87.7 | 52.1 | 27.0 |
+| LARA | `gpt-4.1-mini` | 61.9 | 50.0 | — | — | — |
+| **LARA** | `claude-opus-4-7` | **88.7** | **82.1** | 98.2 | 89.6 | 79.4 |
+
+Each row pairs an agent with the model that produced it, so the two contributions can
+be read separately. **With the model held fixed, the architecture is worth:**
+
+| model | baseline → LARA (TGC) | ratio |
 |---|---|---|
-| `claude-opus-4-7` | 88.7 | 85.6 |
-| `gpt-4.1-mini` | 61.9 | 37.6 |
+| `gpt-4.1-mini` | 23.2 → 61.9 | 2.7× |
+| `claude-opus-4-7` | 54.8 → 88.7 | 1.6× |
 
-The same scaffold carries a mid-size model to 61.9 and a frontier model to 88.7. The
-gap is widest on `test_challenge`, where tasks are longest and a single wrong API
-guess ends the run.
+The architecture helps at both tiers, and helps *more* where the model is weaker —
+the stronger model already knows enough API shapes to recover some of what the
+Explorer supplies. But it does not become redundant: even on `claude-opus-4-7` the
+scaffold is worth 33.9 TGC points, and the SGC gap is wider still (46.4 → 82.1).
+
+The difficulty breakdown is where the scaffold earns most. On difficulty-3 tasks the
+`claude-opus-4-7` baseline manages 27.0 TGC against LARA's 79.4, and the
+`gpt-4.1-mini` baseline collapses to 4.8 TGC and **0.0 SGC** — never once completing
+a full scenario.
+
+70% of the `gpt-4.1-mini` baseline's failures (91 of 129) are step-budget exhaustion
+without ever calling `complete_task()`: it spends its budget discovering which APIs
+exist. That single failure mode is what the Explorer stage exists to remove.
+
+### Architecture versus model
+
+Because the method is identical across both runs, this pair separates the two
+contributions:
+
+| agent | model | `test_normal` TGC | `test_challenge` TGC |
+|---|---|---|---|
+| LARA | `claude-opus-4-7` | 88.7 | 85.6 |
+| LARA | `gpt-4.1-mini` | 61.9 | 37.6 |
+| official baseline | `claude-opus-4-7` | 54.8 | — |
+| official baseline | `gpt-4.1-mini` | 23.2 | — |
+
+Read down the column and the model is worth 26.8 TGC points (61.9 → 88.7 with LARA);
+read across the agent rows and the architecture is worth 33.9 (54.8 → 88.7 on
+`claude-opus-4-7`). Neither alone reaches the submitted score. The model gap is widest
+on `test_challenge`, where tasks are longest and a single wrong API guess ends the run.
 
 ---
 
