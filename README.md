@@ -59,30 +59,41 @@ template, with no planning stage, no per-app knowledge and no cross-app memory. 
 on `test_normal` under identical conditions (one attempt per task, 16 steps), it is
 the starting point LARA was built from:
 
+**`test_normal`** (168 tasks):
+
 | agent | model | TGC | SGC | d1 | d2 | d3 |
 |---|---|---|---|---|---|---|
 | official baseline | `gpt-4.1-mini` | 23.2 | 7.1 | 47.4 | 18.8 | 4.8 |
 | official baseline | `claude-opus-4-7` | 54.8 | 46.4 | 87.7 | 52.1 | 27.0 |
-| LARA | `gpt-4.1-mini` | 61.9 | 50.0 | — | — | — |
+| LARA | `gpt-4.1-mini` | 61.9 | 50.0 | 91.2 | 52.1 | 42.9 |
 | **LARA** | `claude-opus-4-7` | **88.7** | **82.1** | 98.2 | 89.6 | 79.4 |
+
+**`test_challenge`** (417 tasks):
+
+| agent | model | TGC | SGC | d1 | d2 | d3 |
+|---|---|---|---|---|---|---|
+| official baseline | `gpt-4.1-mini` | 9.8 | 3.6 | 36.1 | 8.0 | 1.5 |
+| LARA | `gpt-4.1-mini` | 37.6 | 20.1 | 72.2 | 36.0 | 26.2 |
+| **LARA** | `claude-opus-4-7` | **85.6** | **77.0** | 91.7 | 84.7 | 84.1 |
 
 Each row pairs an agent with the model that produced it, so the two contributions can
 be read separately. **With the model held fixed, the architecture is worth:**
 
-| model | baseline → LARA (TGC) | ratio |
-|---|---|---|
-| `gpt-4.1-mini` | 23.2 → 61.9 | 2.7× |
-| `claude-opus-4-7` | 54.8 → 88.7 | 1.6× |
+| split | model | baseline → LARA (TGC) | ratio |
+|---|---|---|---|
+| `test_normal` | `gpt-4.1-mini` | 23.2 → 61.9 | 2.7× |
+| `test_normal` | `claude-opus-4-7` | 54.8 → 88.7 | 1.6× |
+| `test_challenge` | `gpt-4.1-mini` | 9.8 → 37.6 | **3.8×** |
 
-The architecture helps at both tiers, and helps *more* where the model is weaker —
-the stronger model already knows enough API shapes to recover some of what the
-Explorer supplies. But it does not become redundant: even on `claude-opus-4-7` the
-scaffold is worth 33.9 TGC points, and the SGC gap is wider still (46.4 → 82.1).
+The scaffold helps more where the model is weaker — a stronger model already knows
+enough API shapes to recover some of what the Explorer supplies — and more as tasks
+get harder. It does not become redundant at the frontier: even on `claude-opus-4-7`
+it is worth 33.9 TGC points, with the SGC gap wider still (46.4 → 82.1).
 
-The difficulty breakdown is where the scaffold earns most. On difficulty-3 tasks the
-`claude-opus-4-7` baseline manages 27.0 TGC against LARA's 79.4, and the
-`gpt-4.1-mini` baseline collapses to 4.8 TGC and **0.0 SGC** — never once completing
-a full scenario.
+The difficulty breakdown is where the scaffold earns most. On `test_challenge`
+difficulty-3 the baseline scores **1.5 TGC and 0.0 SGC** — three tasks out of ~200,
+never once completing a full scenario — where LARA on `claude-opus-4-7` holds
+84.1 / 75.4.
 
 70% of the `gpt-4.1-mini` baseline's failures (91 of 129) are step-budget exhaustion
 without ever calling `complete_task()`: it spends its budget discovering which APIs
@@ -98,7 +109,7 @@ contributions:
 | LARA | `claude-opus-4-7` | 88.7 | 85.6 |
 | LARA | `gpt-4.1-mini` | 61.9 | 37.6 |
 | official baseline | `claude-opus-4-7` | 54.8 | — |
-| official baseline | `gpt-4.1-mini` | 23.2 | — |
+| official baseline | `gpt-4.1-mini` | 23.2 | 9.8 |
 
 Read down the column and the model is worth 26.8 TGC points (61.9 → 88.7 with LARA);
 read across the agent rows and the architecture is worth 33.9 (54.8 → 88.7 on
