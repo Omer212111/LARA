@@ -1,7 +1,18 @@
 # LARA — All Experimental Results
 
-**Every run, its score, and what it established.** Compiled 2026-09-05.
-Scores are recomputed from the stored run outputs, not copied from notes.
+**Every run, its score, and what it established.** Compiled 2026-09-05, updated
+2026-09-07. Scores are recomputed from the stored run outputs, not copied from notes.
+
+**Full write-ups**, if a section below is worth reading as a standalone paper:
+- [Model Quality vs. the LARA Harness and Architecture](LARA_Model_vs_Architecture_Paper.pdf)
+  — the full model × architecture × difficulty grid behind §2 below.
+- [Does Separating Planning from Execution Help LLM Agents Solve Multi-App
+  Tasks?](PLANNING_SEPARATION_PAPER_2026-09-06.md)
+  ([PDF](PLANNING_SEPARATION_PAPER_2026-09-06.pdf)) — the two-agent-split ablation
+  behind §4 below; technical report:
+  [PLANNING_SEPARATION_ABLATION_2026-09-06.md](PLANNING_SEPARATION_ABLATION_2026-09-06.md).
+- [Specialist-dispatch ablation](SPECIALIST_DISPATCH_ABLATION_2026-09-04.md)
+  ([PDF](SPECIALIST_DISPATCH_ABLATION_2026-09-04.pdf)) — behind §3 below.
 
 ---
 
@@ -122,24 +133,43 @@ Paired McNemar (exact, two-sided):
 
 ---
 
-## 4. Planning-separation ablation (45-task train slice, August 2026)
+## 4. Planning-separation ablation (45-task train slice, same-day rerun 2026-09-06)
 
-Does splitting Explorer from Executor beat one agent doing both?
+Does splitting Explorer from Executor beat one agent doing both? Superseded twice:
+an August v1 arm withheld the Explorer's knowledge and overstated the gap; v2
+(2026-08-19) transplanted the knowledge live from `build_explorer_system()` but
+compared two runs from different sessions (64.4 vs 31.1). Given the drift finding in
+§5, both arms were **rerun same-day** on 2026-09-06 — see full paper linked above.
 
-| arm | TGC | SGC | notes |
-|---|---|---|---|
-| full LARA | 64.4 | 60.0 | Explorer + Executor, 16 ReAct steps |
-| single agent | 31.1 | 20.0 | one agent, Explorer's full knowledge transplanted, 30 steps |
+| arm | TGC | SGC | tokens/task | notes |
+|---|---|---|---|---|
+| full LARA | **73.3** (33/45) | 64.0 | 72,490 | Explorer + Executor, 16 ReAct steps |
+| single agent (v2) | 42.2 (19/45) | 40.0 | 76,560 | knowledge-transplanted, 30 steps |
 
-> **Conclusion.** Separating planning from execution roughly **doubles** the success
-> rate against a single agent holding identical knowledge, identical specialists and
-> a *larger* step budget. An earlier v1 arm withheld the Explorer's knowledge and
-> overstated the gap; v2 transplants it live from `build_explorer_system()` so the
-> comparison isolates architecture rather than information.
+Paired McNemar (exact): 18 tasks solved only by full LARA, 4 only by the single
+agent, 15 by both, 8 by neither — **p = 0.0043, significant**. 22 discordant pairs
+comfortably clears the "under 10 = directional only" bar that limited §3's arms —
+this is the most statistically robust result in this project.
 
-> **Caveats.** Step ordering in the single agent's stub plan follows a keyword table
-> rather than task logic, so it starts each task pointed at the wrong specialist —
-> an unknown share of the gap is that artefact. Both arms ran in August; see §5.
+> **Conclusion.** Separating planning from execution costs **31.1 TGC points**
+> (73.3 → 42.2) when both arms are run same-day and knowledge is held fixed, and the
+> effect is significant, not an artefact of comparing across sessions. Token cost is
+> nearly identical between arms (72,490 vs 76,560, 5.6% apart) — full LARA is
+> simultaneously cheaper *and* far more accurate. Difficulty-1 shows the largest
+> absolute gap (92.3 vs 46.2), which argues the mechanism is not primarily about
+> running out of steps on long tasks (confirmed directly: no failure in either arm
+> occurred at that arm's step ceiling — see paper §5.1) but about something more
+> basic in discovery-then-action versus discovery-interleaved-with-action.
+
+> **The step-ordering confound was addressed, then tested, and found not to be
+> driving the result.** `ablation_single_agent.py` now sorts the stub plan's app
+> order by first-mention position in the task text rather than an arbitrary
+> keyword-table order — a fix verified to actually change routing on 7 of 19
+> multi-app tasks in this slice. Isolating those 7 tasks specifically (pre-fix vs.
+> post-fix, same code otherwise): **0 improved, 0 regressed** — the fix changed
+> nothing on the tasks it targets. The 38 unaffected tasks moved by more (9 up, 2
+> down) from ordinary run-to-run noise alone. The 31.1-point gap above is not an
+> ordering artefact; whatever the single agent is missing, it isn't (mainly) this.
 
 ---
 
@@ -156,8 +186,9 @@ Does splitting Explorer from Executor beat one agent doing both?
 > points; re-running dispatch same-day erased the entire effect.
 >
 > **Any cross-day comparison against a hosted model is unsafe.** All §3 numbers are
-> same-day. §4 is not — both its arms ran in August, so its direction likely holds
-> but its magnitude should be re-measured before being quoted.
+> same-day. §4's original (August) run was not, which is exactly why it was rerun
+> same-day on 2026-09-06 — the current §4 numbers are the corrected version and the
+> August figures should not be quoted.
 
 ---
 
@@ -203,8 +234,17 @@ token accounting; estimates from prompt sizes undercounted by ~2.5×.
 | baseline, 45-task slice | `experiments/outputs/baseline_react_ext` |
 | generic / dispatch / monolith | `experiments/outputs/spec_{generic,dispatch,monolith}_ext` |
 | monolith, first run (no tokens) | `experiments/outputs/spec_monolith_ext_NOTOKENS` |
-| planning ablation (August) | `experiments/outputs/ablation_{full,single}_ext_AUG2026` |
-| token logs | `tokens_*.jsonl` |
+| planning ablation, full LARA (§4 headline) | `experiments/outputs/ablation_full_ext` |
+| planning ablation, single-agent (§4 headline, 42.2%) | `experiments/outputs/ablation_single_ext_PRE_ORDERFIX` |
+| planning ablation, single-agent (August, superseded) | `experiments/outputs/ablation_{full,single}_ext_AUG2026` |
+| token logs | `tokens_*.jsonl`, `tokens_planning{full,single}_ext_PRE_ORDERFIX.jsonl` |
+
+**⚠️ `experiments/outputs/ablation_single_ext` is NOT the §4 headline run.** After
+§4's numbers were generated, that directory was overwritten by a *diagnostic* rerun
+that tested the app-ordering fix in isolation (57.8% TGC — see the ordering-fix note
+in §4). The run the 42.2% figure and its p-value are computed from is preserved at
+`ablation_single_ext_PRE_ORDERFIX`; use that path, not the bare `_ext` one, to
+reproduce §4.
 
 **Note on difficulty columns.** Per-difficulty figures in §2 come from the official
 `appworld evaluate` report. The local `analysis/specialist_ablation_report.py` infers

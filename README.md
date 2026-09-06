@@ -157,9 +157,26 @@ read across the agent rows and the architecture is worth 33.9 (54.8 → 88.7 on
 `claude-opus-4-7`). Neither alone reaches the submitted score. The model gap is widest
 on `test_challenge`, where tasks are longest and a single wrong API guess ends the run.
 
+> 📄 **We wrote this up properly.** Filling the full model × architecture × difficulty
+> grid shows the two contributions trade off with task difficulty: on easy tasks a
+> strong model is nearly self-sufficient (+10.5 TGC from the architecture); on the
+> hardest tasks the same strong model collapses without it and LARA rescues +73.8
+> points. Full paper:
+> [**Model Quality vs. the LARA Harness and Architecture**](docs/LARA_Model_vs_Architecture_Paper.pdf).
+
 ---
 
 ## How LARA works
+
+> 📄 **We also tested the two-agent split itself.** Is a dedicated Explorer stage
+> worth the engineering cost over one agent that plans and executes in a single loop?
+> Holding knowledge, tools, and step budget fixed as much as possible, the two-stage
+> design scores 73.3% against a knowledge-matched single agent's 42.2% on the same
+> paired task slice (p = 0.0043). Full paper:
+> [**Does Separating Planning from Execution Help LLM Agents Solve Multi-App
+> Tasks?**](docs/PLANNING_SEPARATION_PAPER_2026-09-06.md)
+> ([PDF](docs/PLANNING_SEPARATION_PAPER_2026-09-06.pdf)) · technical report:
+> [`docs/PLANNING_SEPARATION_ABLATION_2026-09-06.md`](docs/PLANNING_SEPARATION_ABLATION_2026-09-06.md)
 
 > 🎥 **[Watch the LARA explainer](https://github.com/user-attachments/assets/f0e58856-26b2-445d-bdbf-82caa714a229)** —
 > a short walkthrough of the pipeline end to end.
