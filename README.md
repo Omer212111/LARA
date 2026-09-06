@@ -29,6 +29,26 @@ the state the task asked for.
 
 ## The problem
 
+Language models are strong at producing a *single* correct answer and weak at
+carrying out a *long chain* of actions to reach one. Real digital work is the second
+kind: paying everyone in a spreadsheet, reconciling a bill across a payments app and
+a split-expense app, tidying a music library against a set of rules. These take
+dozens of dependent steps, spread over several applications, where the information
+needed at step 12 was produced at step 3 and no single service holds the whole
+picture.
+
+That is where models break down. A wrong assumption early is not corrected later, it
+is *built on*. State has to be carried across applications that share no schema.
+Actions are irreversible — a payment sent twice cannot be un-sent — so the agent has
+to be right the first time rather than iterate toward correctness. And because
+success is judged by the end state of the world rather than by what the agent claims,
+a confident wrong answer scores exactly zero.
+
+AppWorld exists to measure that gap directly, which is what makes it a hard target
+and an honest one.
+
+## The benchmark
+
 [AppWorld](https://appworld.dev) (ACL 2024) is a benchmark of ~11 simulated apps —
 Spotify, Gmail, Amazon, Venmo, Splitwise, Todoist, SimpleNote, Phone, FileSystem,
 plus a Supervisor app holding the user's own accounts and credentials.
@@ -197,25 +217,15 @@ names, and calling conventions. The model sees Venmo's conventions while working
 Venmo step, and Splitwise's on the next — instead of one prompt trying to hold all 11
 apps at once.
 
-### 3. Give cross-app joins somewhere to live
+> 📄 **We measured this.** A four-arm ablation varying how much per-app knowledge the
+> Executor sees, and how it is delivered, found that the *knowledge* matters
+> (64.4 → 82.2 TGC) while the *routing* does not — what per-step dispatch buys is
+> 2.44× lower token cost at equal accuracy. Full study:
+> [**Specialist-dispatch ablation**](docs/SPECIALIST_DISPATCH_ABLATION_2026-09-04.md)
+> ([PDF](docs/SPECIALIST_DISPATCH_ABLATION_2026-09-04.pdf)) · all results:
+> [`docs/RESULTS_SUMMARY.md`](docs/RESULTS_SUMMARY.md)
 
-Multi-app tasks are database joins. The CSV gives a name and an amount, Venmo gives a
-user id, Splitwise gives a group id — and no single app holds the whole row.
-
-Without somewhere to put it, that table exists only as printed stdout, so the model
-re-derives it at every step and loses it entirely between attempts. LARA puts a dict
-in the sandbox namespace instead. The AppWorld sandbox is one long-lived IPython shell
-per task, so it survives every `execute()` — including exceptions:
-
-```python
-remember_entity('Andrew', amount=42.50)          # from the CSV
-remember_entity('Andrew', venmo_id=118)          # from Venmo
-recall_entity('Andrew')['venmo_id']              # the join, as a lookup
-```
-
-Measured adoption on multi-app tasks: the model uses it in ~82% of attempts.
-
-### 4. Cut what does not pay for itself
+### 3. Cut what does not pay for itself
 
 The Reviewer diagnoses a wrong answer so the Executor can retry. It is **disabled**.
 
