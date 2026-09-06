@@ -162,7 +162,9 @@ on `test_challenge`, where tasks are longest and a single wrong API guess ends t
 
 ## How LARA works
 
-
+> 🎥 **[Watch the LARA explainer](docs/media/lara-explainer-compressed.mp4)** — a
+> short walkthrough of the pipeline end to end. *(GitHub shows a preview link for
+> videos stored in a repo; click through to play it.)*
 
 Four agents pass one shared state object around a
 [LangGraph](https://langchain-ai.github.io/langgraph/) `StateGraph`:
