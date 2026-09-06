@@ -3,7 +3,7 @@
 
 # LARA — a multi-agent coding agent for AppWorld
 
-** 1st place on the [AppWorld leaderboard](https://appworld.dev/leaderboard)** —
+**🥇 1st place on the [AppWorld leaderboard](https://appworld.dev/leaderboard)** —
 TGC 85.6 on the `test_challenge` split.
 
 LARA solves [AppWorld](https://appworld.dev) tasks by **writing Python**. Given an
@@ -50,7 +50,8 @@ every variant was solved — much stricter, and the one that punishes inconsiste
 | **LARA** | `claude-opus-4-7` | `test_challenge` | 417 | **85.6** | **77.0** |
 
 Held-out test splits, one Executor attempt per task, scored with the official
-`appworld evaluate`. On `test_challenge` this places LARA **2nd of 24 entries**.
+`appworld evaluate`. On `test_challenge` this places LARA **1st on the
+[AppWorld leaderboard](https://appworld.dev/leaderboard)**.
 
 ### Against the official baseline
 
