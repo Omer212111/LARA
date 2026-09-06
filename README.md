@@ -1,6 +1,3 @@
-<img width="720" height="405" alt="intro-map" src="https://github.com/user-attachments/assets/64563b03-4ee8-44e8-afb8-3376572cd00b" />
-
-
 # LARA — a multi-agent coding agent for AppWorld
 
 <div align="center">
@@ -16,6 +13,8 @@
 [![TGC](https://img.shields.io/badge/test__normal_TGC-88.7-1baf7a?style=for-the-badge&labelColor=1a1a1a)](https://appworld.dev/appworld/leaderboard)
 
 *Standings as of 6 September 2026 — [verify on the live leaderboard](https://appworld.dev/appworld/leaderboard)*
+
+<img width="720" height="405" alt="intro-map" src="https://github.com/user-attachments/assets/64563b03-4ee8-44e8-afb8-3376572cd00b" />
 
 </div>
 
