@@ -1,6 +1,8 @@
+
+
 # LARA — a multi-agent coding agent for AppWorld
 
-**🥈 2nd place on the [AppWorld leaderboard](https://appworld.dev/leaderboard)** —
+** 1st place on the [AppWorld leaderboard](https://appworld.dev/leaderboard)** —
 TGC 85.6 on the `test_challenge` split.
 
 LARA solves [AppWorld](https://appworld.dev) tasks by **writing Python**. Given an
@@ -105,6 +107,8 @@ on `test_challenge`, where tasks are longest and a single wrong API guess ends t
 ---
 
 ## How LARA works
+
+
 
 Four agents pass one shared state object around a
 [LangGraph](https://langchain-ai.github.io/langgraph/) `StateGraph`:
