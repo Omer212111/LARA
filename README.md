@@ -3,8 +3,21 @@
 
 # LARA — a multi-agent coding agent for AppWorld
 
-**🥇 1st place on the [AppWorld leaderboard](https://appworld.dev/leaderboard)** —
-TGC 85.6 on the `test_challenge` split.
+<div align="center">
+
+## 🥇 &nbsp;1st place on the AppWorld leaderboard
+
+**85.6** TGC on `test_challenge` — a **12.2-point** lead over 2nd place
+
+[![leaderboard](https://img.shields.io/badge/AppWorld_Leaderboard-%231-FFD700?style=for-the-badge&labelColor=1a1a1a)](https://appworld.dev/appworld/leaderboard)
+&nbsp;
+[![TGC](https://img.shields.io/badge/test__challenge_TGC-85.6-2a78d6?style=for-the-badge&labelColor=1a1a1a)](https://appworld.dev/appworld/leaderboard)
+&nbsp;
+[![TGC](https://img.shields.io/badge/test__normal_TGC-88.7-1baf7a?style=for-the-badge&labelColor=1a1a1a)](https://appworld.dev/appworld/leaderboard)
+
+*Standings as of 6 September 2026 — [verify on the live leaderboard](https://appworld.dev/appworld/leaderboard)*
+
+</div>
 
 LARA solves [AppWorld](https://appworld.dev) tasks by **writing Python**. Given an
 instruction like *"pay each person in debt_list.csv via Venmo, or file a Splitwise
@@ -51,7 +64,8 @@ every variant was solved — much stricter, and the one that punishes inconsiste
 
 Held-out test splits, one Executor attempt per task, scored with the official
 `appworld evaluate`. On `test_challenge` this places LARA **1st on the
-[AppWorld leaderboard](https://appworld.dev/leaderboard)**.
+[AppWorld leaderboard](https://appworld.dev/appworld/leaderboard)** as of
+6 September 2026, 12.2 TGC points ahead of second place.
 
 ### Against the official baseline
 
