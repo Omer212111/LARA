@@ -230,35 +230,7 @@ retry mechanism ever demonstrates it converts on train/dev.
 
 ---
 
-## Reproducing the leaderboard run
 
-`config.py` defaults to `gpt-4.1-mini`. The leaderboard run selected
-`claude-opus-4-7` at run time through environment overrides rather than by editing
-the defaults:
-
-```bash
-export OPENAI_BASE_URL=<litellm-gateway-url>   # any OpenAI-compatible endpoint
-export OPENAI_API_KEY=<gateway-key>
-export EXECUTOR_MODEL=claude-opus-4-7
-export EXPLORER_MODEL=claude-opus-4-7
-
-cd LARA-sub_agents/LARA
-python run_leaderboard.py test_normal    lara_test_normal
-python run_leaderboard.py test_challenge lara_test_challenge
-```
-
-Scoring is the stock AppWorld command:
-
-```bash
-appworld evaluate lara_test_normal    test_normal
-appworld evaluate lara_test_challenge test_challenge
-```
-
-Without the overrides the same commands run on `gpt-4.1-mini` and reproduce the
-61.9 / 37.6 result instead. Both splits were run back to back through the same
-entrypoint with no code changes between them, scored with `appworld` 0.1.3.post1.
-
----
 
 ## Where the code is
 
