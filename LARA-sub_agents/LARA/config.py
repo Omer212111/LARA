@@ -11,8 +11,13 @@ import os
 # the retry Executor was cut off. Raised to 6 so a full re-plan/retry cycle (incl. the
 # Reviewer path) can actually complete. recursion_limit auto-scales as MAX_ITERATIONS*4.
 MAX_ITERATIONS    = 6    # hard ceiling on total Explorer+Executor node runs per task
-MAX_EXECUTOR_RUNS = 1    # max number of Executor attempts per task (1 = no retry)
 MAX_REACT_STEPS   = 16   # max ReAct steps per Executor attempt
+
+# MAX_EXECUTOR_RUNS: max Executor attempts per task (1 = no retry). The reviewer
+# ablation overrides this per arm via LARA_MAX_EXECUTOR_RUNS (see run_reviewer_
+# ablation.py); the default stays 1 so a normal run is unchanged when the env var
+# is absent.
+MAX_EXECUTOR_RUNS = int(os.environ.get("LARA_MAX_EXECUTOR_RUNS", "1"))
 
 # ── Reviewer / retry ──────────────────────────────────────────────────────────
 # False → one Executor attempt per task: the Reviewer never fires and the
@@ -26,7 +31,22 @@ MAX_REACT_STEPS   = 16   # max ReAct steps per Executor attempt
 # significant token cost for no measured gain.
 #
 # Set back to True when a retry mechanism is shown to convert on train/dev.
-ENABLE_REVIEWER_RETRY = False
+# Overridable via LARA_ENABLE_RETRY ("1"/"true") for the reviewer ablation; the
+# literal False remains the default for a normal run with the env var unset.
+def _env_flag(name: str, default: bool) -> bool:
+    v = os.environ.get(name)
+    if v is None:
+        return default
+    return v.strip().lower() in ("1", "true", "yes", "on")
+
+ENABLE_REVIEWER_RETRY = _env_flag("LARA_ENABLE_RETRY", False)
+
+# Reviewer ablation, arm C ("blind retry"): when True AND ENABLE_REVIEWER_RETRY is
+# True, a wrong answer routes straight back to the Executor for a SECOND fresh
+# attempt WITHOUT the Reviewer running — no diagnosis, no retry context. Isolates
+# whether the Reviewer's diagnosis buys anything over a bare re-roll. Default
+# False → the normal Reviewer path. See planning_loop._after_executor.
+REVIEWER_BYPASS = _env_flag("LARA_REVIEWER_BYPASS", False)
 
 # ── Executor backend — change ONE line to switch models ──────────────────────
 #   "openai"  → uses EXECUTOR_MODEL_OPENAI via OpenAI API

@@ -15,8 +15,32 @@ import os
 from openai import OpenAI
 
 import logger
+import token_meter
 from config import REVIEWER_MODEL
 from state import AgentState
+
+# Endpoint-divergence guard (reviewer ablation). The Executor and Explorer honour
+# OPENAI_BASE_URL (base.py, llms.py, explorer.py); this Reviewer client is created
+# with no base_url, so it ALWAYS hits api.openai.com. Those two endpoints are the
+# same ONLY when OPENAI_BASE_URL is unset — which is the ablation's configuration
+# (OpenAI direct). If the var is ever set, the Reviewer would silently diverge from
+# the Executor's endpoint and the token/latency comparison would be invalid, so we
+# warn loudly once rather than let it pass unnoticed. Left as a warning, not an
+# override, per the study design: the Reviewer is meant to hit OpenAI directly.
+_warned_base_url_divergence = False
+
+
+def _warn_if_endpoint_diverges() -> None:
+    global _warned_base_url_divergence
+    if _warned_base_url_divergence:
+        return
+    _warned_base_url_divergence = True
+    if os.environ.get("OPENAI_BASE_URL"):
+        logger.warning(
+            "Reviewer hits api.openai.com directly but OPENAI_BASE_URL is set, so the "
+            "Executor uses a different endpoint — reviewer/executor token comparison is "
+            "no longer apples-to-apples. Unset OPENAI_BASE_URL for the reviewer ablation."
+        )
 
 
 def reviewer_node(state: AgentState) -> dict:
@@ -127,6 +151,7 @@ EXPLANATION: <1-2 sentences: exactly what went wrong>
 FIX_INSTRUCTION: <concrete instruction for the Executor — name the exact loop, field, or API to change>
 """
 
+    _warn_if_endpoint_diverges()
     client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
     response = client.chat.completions.create(
         model=REVIEWER_MODEL,
@@ -134,6 +159,9 @@ FIX_INSTRUCTION: <concrete instruction for the Executor — name the exact loop,
         temperature=0.1,
         max_tokens=600,
     )
+    # Reviewer token accounting (no-op unless LARA_TOKEN_LOG is set). This is the
+    # per-fire cost the ablation weighs against whatever the retry converts.
+    token_meter.record("reviewer", response, model=REVIEWER_MODEL)
     diagnosis = response.choices[0].message.content or ""
     logger.output_block(diagnosis, label="🔎 Reviewer Diagnosis")
 

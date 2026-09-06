@@ -18,7 +18,12 @@ from langchain_core.messages import HumanMessage
 from langgraph.graph import END, StateGraph
 
 import logger
-from config import ENABLE_REVIEWER_RETRY, MAX_EXECUTOR_RUNS, MAX_ITERATIONS
+from config import (
+    ENABLE_REVIEWER_RETRY,
+    MAX_EXECUTOR_RUNS,
+    MAX_ITERATIONS,
+    REVIEWER_BYPASS,
+)
 from explorer import explorer_node
 from executor import executor_node
 from reviewer import reviewer_node
@@ -44,6 +49,12 @@ def _after_executor(state: AgentState) -> str:
 
     The Reviewer→Executor edge BYPASSES the Supervisor, so the MAX_EXECUTOR_RUNS /
     MAX_ITERATIONS guards MUST live here — otherwise the limits never fire on this path.
+
+    Reviewer ablation, arm C (REVIEWER_BYPASS): a wrong answer routes straight to
+    "Executor" instead of "Reviewer". The Executor→Executor edge also bypasses the
+    Supervisor, so the same guards below bound it. `reviewer_ran` never flips on this
+    path, so the executor_runs ceiling is the only thing that stops a third attempt —
+    which is exactly why the MAX_EXECUTOR_RUNS check must stay here.
     """
     if not ENABLE_REVIEWER_RETRY:
         return "Supervisor"
@@ -58,7 +69,10 @@ def _after_executor(state: AgentState) -> str:
     if (wrong_answer and not reviewer_ran
             and executor_runs < MAX_EXECUTOR_RUNS
             and iterations < MAX_ITERATIONS - 1):
-        return "Reviewer"
+        # Arm C: blind retry — skip the Reviewer, re-run the Executor with no
+        # diagnosis (reviewer_diagnosis stays "", so the Executor treats attempt 2
+        # as a fresh attempt: no failed-assert passthrough, no anti-repeat context).
+        return "Executor" if REVIEWER_BYPASS else "Reviewer"
     return "Supervisor"
 
 
@@ -81,7 +95,9 @@ def process_goal(goal: str, task_id: str = "") -> bool:
     workflow.add_conditional_edges(
         "Executor",
         _after_executor,
-        {"Supervisor": "Supervisor", "Reviewer": "Reviewer"},
+        # "Executor" is the arm-C (REVIEWER_BYPASS) blind-retry self-loop; bounded by
+        # the MAX_EXECUTOR_RUNS check inside _after_executor, same as the Reviewer path.
+        {"Supervisor": "Supervisor", "Reviewer": "Reviewer", "Executor": "Executor"},
     )
     workflow.add_conditional_edges(
         "Supervisor",

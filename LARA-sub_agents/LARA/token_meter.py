@@ -27,12 +27,28 @@ import json
 import os
 import threading
 import time
+from collections import defaultdict
 
 _LOCK = threading.Lock()
 _PATH = os.environ.get("LARA_TOKEN_LOG", "token_usage.jsonl")
 
-# Set by the benchmark loop so each row can be attributed to a task.
+# Metering is OFF unless LARA_TOKEN_LOG is set. This keeps a normal LARA run
+# byte-for-byte unchanged: record() early-returns, no file is written, and the
+# in-memory accumulator stays empty. The reviewer/specialist ablations set the
+# env var to switch it on. Read once at import — the runner sets it before this
+# module loads.
+_ENABLED = bool(os.environ.get("LARA_TOKEN_LOG"))
+
+# Set by the benchmark loop / Executor node so each row can be attributed to a
+# task and to the Executor attempt it belongs to. current_attempt lets the
+# reviewer ablation separate "executor run 2" tokens from "executor run 1".
 current_task_id: str | None = None
+current_attempt: int | None = None
+
+# In-memory running totals, keyed (task_id, attempt, role) -> summed total_tokens.
+# tokens_for() reads this so a caller (base.py) can get "reviewer call tokens" and
+# "executor run 2 tokens" for the current task without re-parsing the JSONL.
+_totals: dict[tuple, int] = defaultdict(int)
 
 
 def set_task(task_id: str | None) -> None:
@@ -40,12 +56,24 @@ def set_task(task_id: str | None) -> None:
     current_task_id = task_id
 
 
+def set_attempt(attempt: int | None) -> None:
+    global current_attempt
+    current_attempt = attempt
+
+
 def record(role: str, response, **extra) -> None:
-    """Append one usage row. Never raises."""
+    """Append one usage row and add it to the in-memory totals. Never raises.
+
+    No-op unless metering is enabled (LARA_TOKEN_LOG set).
+    """
+    if not _ENABLED:
+        return
     try:
         usage = getattr(response, "usage", None)
         if usage is None:
             return
+        attempt = extra.get("attempt", current_attempt)
+        total = getattr(usage, "total_tokens", None) or 0
         row = {
             "role": role,
             "model": getattr(response, "model", None),
@@ -53,13 +81,34 @@ def record(role: str, response, **extra) -> None:
             "completion_tokens": getattr(usage, "completion_tokens", None),
             "total_tokens": getattr(usage, "total_tokens", None),
             "task_id": current_task_id,
+            "attempt": attempt,
             "t": round(time.time(), 3),
         }
         row.update(extra)
-        with _LOCK, open(_PATH, "a") as fh:
-            fh.write(json.dumps(row) + "\n")
+        with _LOCK:
+            _totals[(current_task_id, attempt, role)] += total
+            with open(_PATH, "a") as fh:
+                fh.write(json.dumps(row) + "\n")
     except Exception:
         pass
+
+
+def tokens_for(task_id: str | None = None, attempt: int | None = None,
+               role: str | None = None) -> int:
+    """Sum total_tokens recorded for the current task, filtered by attempt/role.
+
+    attempt/role left as None means "any". Used by base.py to report the reviewer
+    call's tokens (role='reviewer') and the second Executor attempt's tokens
+    (attempt=2, role='executor') into the reviewer event log.
+    """
+    task_id = task_id if task_id is not None else current_task_id
+    with _LOCK:
+        return sum(
+            v for (t, a, r), v in _totals.items()
+            if t == task_id
+            and (attempt is None or a == attempt)
+            and (role is None or r == role)
+        )
 
 
 def summarise(path: str | None = None) -> dict:

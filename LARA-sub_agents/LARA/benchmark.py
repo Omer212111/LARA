@@ -12,6 +12,7 @@ from appworld import AppWorld, load_task_ids
 from planning_loop import process_goal
 from tools import set_appworld_env
 import logger
+import token_meter
 try:
     from analysis import hardcode_trace
 except ImportError:      # dev-only tracer — a missing analysis/ must never break a run
@@ -78,6 +79,10 @@ def run_official_benchmark(num_tasks=5, dataset="train", task_ids=None):
 
     for index, task_id in enumerate(task_ids):
         logger.task_header(task_id, index + 1, num_tasks)
+        # Attribute token-meter and reviewer-event rows to this task (no-op unless
+        # the ablation env vars are set). Reset the attempt marker per task.
+        token_meter.set_task(task_id)
+        token_meter.set_attempt(None)
         start_time = time.monotonic()
 
         correct = False

@@ -19,6 +19,8 @@ import requests
 from langchain_core.messages import AIMessage
 
 import logger
+import reviewer_meter
+import token_meter
 try:
     from analysis import hardcode_trace
 except ImportError:      # dev-only tracer — a missing analysis/ must never break a run
@@ -113,6 +115,44 @@ def _read_ledger(max_chars: int = 900) -> str:
     if not out.startswith("LEDGER:") or "0 entities, 0 artifacts" in out:
         return ""
     return out[:max_chars]
+
+
+# Ground truth for what complete_task() actually submitted.
+#
+# Parsing the model's own code cannot answer this. A quoted literal is
+# recoverable, but `complete_task(answer=str(total))` is not — both attempts
+# render as the same expression text while the VALUE differs (measured: task
+# 76f2c72_3 went 0.0 -> correct with both attempts extracting as
+# "<computed: str(total_cost)>"). An ACTION task's `answer=None` is likewise
+# indistinguishable from "no answer found", so 46 of 52 retries in the first
+# ablation recorded an empty string for both attempts and were silently scored
+# as "submission identical".
+#
+# complete_task stores json.dumps(answer) on the Task model
+# (appworld/apps/supervisor/apis.py) and show_active_task returns it, so reading
+# it back is exact. repr() keeps None distinguishable from "" and "None".
+_ANSWER_PROBE = (
+    "print('LARA_SUBMITTED_ANSWER=' + repr("
+    "apis.supervisor.show_active_task().get('answer')))"
+)
+_ANSWER_RE = re.compile(r"LARA_SUBMITTED_ANSWER=(.*)")
+
+
+def _read_submitted_answer() -> str | None:
+    """The answer complete_task() actually recorded, or None if unreadable.
+
+    Read-only probe; never raises. None means "could not resolve" and must NOT
+    be collapsed into "no answer" by the caller — that conflation is the bug
+    this replaces.
+    """
+    try:
+        out = execute_python_code.invoke({"code": _ANSWER_PROBE})
+    except Exception:
+        return None
+    if not out or "Traceback" in out or out.startswith(("Execution failed", "Execution Failed")):
+        return None
+    m = _ANSWER_RE.search(out)
+    return m.group(1).strip() if m else None
 
 
 _LEDGER_WRITE_RE = re.compile(r"\b(remember_entity|remember)\s*\(")
@@ -214,6 +254,10 @@ def _llm_call(messages: list[dict]) -> str:
             temperature=0.1,
             max_tokens=1500,
         )
+        # Executor token accounting, attributed to the current attempt via
+        # token_meter.current_attempt (no-op unless LARA_TOKEN_LOG is set). The
+        # reviewer ablation reads the attempt-2 total back out of here.
+        token_meter.record("executor", response)
         return response.choices[0].message.content or ""
 
     elif EXECUTOR_BACKEND == "ollama":
@@ -377,6 +421,10 @@ class AppOrchestrator(BaseAppExecutor):
 
     def node(self, state: AgentState) -> dict:
         attempt_num = state.get("executor_runs", 0) + 1
+        # Tag every Executor LLM call this node makes with the attempt number, so the
+        # reviewer ablation can separate run-2 tokens from run-1 (no-op when metering
+        # is off).
+        token_meter.set_attempt(attempt_num)
         backend_label = (
             f"{EXECUTOR_BACKEND}:"
             f"{EXECUTOR_MODEL_OLLAMA if EXECUTOR_BACKEND == 'ollama' else os.environ.get('EXECUTOR_MODEL', EXECUTOR_MODEL_OPENAI)}"
@@ -911,6 +959,12 @@ class AppOrchestrator(BaseAppExecutor):
                 if answer:
                     break
 
+        # Ground-truth submitted answer, read back from the environment. Kept
+        # SEPARATE from `answer` above: `answer` feeds the retry's anti-repeat
+        # context, and changing that would alter arm behaviour rather than just
+        # fix the metric. This field is used only for submission_differed.
+        submitted_value = _read_submitted_answer() if submitted_this_attempt else None
+
         new_findings = dict(findings)
         new_findings[f"attempt_{attempt_num}"] = combined_output[:1500]
 
@@ -957,7 +1011,7 @@ class AppOrchestrator(BaseAppExecutor):
             flush=True,
         )
 
-        return {
+        ret = {
             "messages":             [AIMessage(content=report)],
             "findings":             new_findings,
             "last_error":           combined_output if had_error else "",
@@ -971,3 +1025,51 @@ class AppOrchestrator(BaseAppExecutor):
             "reviewer_ran":         False,
             "active_app":           active_app,
         }
+
+        # ── Reviewer-ablation checkpoint ──────────────────────────────────────
+        # Snapshot attempt 1's verdict the moment it is produced, before any retry
+        # calls world.evaluate() again and overwrites report.md. Set on attempt 1
+        # ONLY and never overwritten (attempt 2's return dict omits these keys, so
+        # LangGraph keeps the attempt-1 values). This is the within-arm 2x2.
+        if attempt_num == 1:
+            ret["attempt1_completed"] = eval_info["completed"]
+            ret["attempt1_correct"]   = eval_info["correct"]
+            ret["attempt1_answer"]    = answer
+            ret["attempt1_submitted"] = submitted_value
+
+        # One retry-event row per second (or later) Executor attempt — arm B
+        # (Reviewer drove it, reviewer_diagnosis non-empty) or arm C (blind re-roll,
+        # empty). Arm A never reaches attempt 2, so it emits nothing. No-op unless
+        # LARA_REVIEWER_LOG is set. task_id comes from token_meter (set by the
+        # benchmark loop) since the node has no direct handle to it.
+        if attempt_num >= 2:
+            attempt1_answer = state.get("attempt1_answer", "")
+            # Corrected submission comparison, on the ground-truth values.
+            # resolved=False means one side could not be read — reported as its
+            # own category, never folded into "identical".
+            a1_sub = state.get("attempt1_submitted")
+            sub_resolved = (a1_sub is not None) and (submitted_value is not None)
+            sub_differed = (a1_sub != submitted_value) if sub_resolved else None
+            reviewer_meter.log_event(
+                attempt1_submitted=a1_sub,
+                final_submitted=submitted_value,
+                submission_resolved=sub_resolved,
+                submission_differed_v2=sub_differed,
+                task_id=token_meter.current_task_id,
+                arm=os.environ.get("LARA_ARM", ""),
+                reviewer_fired=bool(reviewer_diagnosis),
+                executor_runs=attempt_num,
+                diagnosis=reviewer_diagnosis[:1500],
+                attempt1_completed=state.get("attempt1_completed"),
+                attempt1_correct=state.get("attempt1_correct"),
+                final_completed=eval_info["completed"],
+                final_correct=eval_info["correct"],
+                submission_differed=(answer != attempt1_answer),
+                attempt1_answer=attempt1_answer[:300],
+                final_answer=answer[:300],
+                reviewer_tokens=token_meter.tokens_for(role="reviewer"),
+                executor_run2_tokens=token_meter.tokens_for(
+                    attempt=attempt_num, role="executor"),
+            )
+
+        return ret

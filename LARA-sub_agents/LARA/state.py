@@ -28,3 +28,10 @@ class AgentState(TypedDict, total=False):
     reviewer_diagnosis:   str    # structured diagnosis from Reviewer (separate from last_error)
     # Sub-agent tracking
     active_app:           str    # last app specialist used ("spotify", "gmail", etc., or "")
+    # Reviewer-ablation checkpoint: attempt-1 verdict, captured before any retry
+    # overwrites the world's report.md. Set on the FIRST Executor attempt only and
+    # never touched again, giving the within-arm 2x2 (attempt-1 x final).
+    attempt1_completed:   bool   # did attempt 1 call complete_task()?
+    attempt1_correct:     bool   # was attempt 1's answer correct (world.evaluate)?
+    attempt1_answer:      str    # attempt 1's submitted answer (regex-extracted from code)
+    attempt1_submitted:   str    # attempt 1's answer read back from the env (ground truth)
