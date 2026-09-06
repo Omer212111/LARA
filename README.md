@@ -73,27 +73,34 @@ the starting point LARA was built from:
 | agent | model | TGC | SGC | d1 | d2 | d3 |
 |---|---|---|---|---|---|---|
 | official baseline | `gpt-4.1-mini` | 9.8 | 3.6 | 36.1 | 8.0 | 1.5 |
+| official baseline | `claude-opus-4-7` | 27.3 | 18.7 | 75.0 | 26.7 | 10.3 |
 | LARA | `gpt-4.1-mini` | 37.6 | 20.1 | 72.2 | 36.0 | 26.2 |
 | **LARA** | `claude-opus-4-7` | **85.6** | **77.0** | 91.7 | 84.7 | 84.1 |
 
 Each row pairs an agent with the model that produced it, so the two contributions can
 be read separately. **With the model held fixed, the architecture is worth:**
 
-| split | model | baseline → LARA (TGC) | ratio |
-|---|---|---|---|
-| `test_normal` | `gpt-4.1-mini` | 23.2 → 61.9 | 2.7× |
-| `test_normal` | `claude-opus-4-7` | 54.8 → 88.7 | 1.6× |
-| `test_challenge` | `gpt-4.1-mini` | 9.8 → 37.6 | **3.8×** |
+| split | model | baseline → LARA (TGC) | ratio | +pts |
+|---|---|---|---|---|
+| `test_normal` | `gpt-4.1-mini` | 23.2 → 61.9 | 2.7× | +38.7 |
+| `test_normal` | `claude-opus-4-7` | 54.8 → 88.7 | 1.6× | +33.9 |
+| `test_challenge` | `gpt-4.1-mini` | 9.8 → 37.6 | 3.8× | +27.8 |
+| `test_challenge` | `claude-opus-4-7` | 27.3 → 85.6 | **3.1×** | **+58.3** |
 
-The scaffold helps more where the model is weaker — a stronger model already knows
-enough API shapes to recover some of what the Explorer supplies — and more as tasks
-get harder. It does not become redundant at the frontier: even on `claude-opus-4-7`
-it is worth 33.9 TGC points, with the SGC gap wider still (46.4 → 82.1).
+**The architecture matters most exactly where the benchmark is hardest.** On the
+easier split a strong model recovers much of what the scaffold provides (1.6× on
+`test_normal`). On `test_challenge` it does not: the same `claude-opus-4-7` collapses
+to 27.3 without the scaffold while LARA holds 85.6 — **+58.3 TGC points, the largest
+gap of any configuration measured.**
 
-The difficulty breakdown is where the scaffold earns most. On `test_challenge`
-difficulty-3 the baseline scores **1.5 TGC and 0.0 SGC** — three tasks out of ~200,
-never once completing a full scenario — where LARA on `claude-opus-4-7` holds
-84.1 / 75.4.
+Between the two splits the baseline loses half its score (54.8 → 27.3) while LARA
+loses 3.5% (88.7 → 85.6). Long multi-app tasks are where an unaided model runs out of
+steps rediscovering APIs, and where planning plus per-app knowledge pays off most.
+
+The difficulty breakdown sharpens it further. On `test_challenge` difficulty-3 the
+`gpt-4.1-mini` baseline scores **1.5 TGC and 0.0 SGC** — three tasks out of ~200,
+never once completing a full scenario — and even the `claude-opus-4-7` baseline
+reaches only 10.3, where LARA on the same model holds **84.1 / 75.4**.
 
 70% of the `gpt-4.1-mini` baseline's failures (91 of 129) are step-budget exhaustion
 without ever calling `complete_task()`: it spends its budget discovering which APIs
@@ -108,7 +115,7 @@ contributions:
 |---|---|---|---|
 | LARA | `claude-opus-4-7` | 88.7 | 85.6 |
 | LARA | `gpt-4.1-mini` | 61.9 | 37.6 |
-| official baseline | `claude-opus-4-7` | 54.8 | — |
+| official baseline | `claude-opus-4-7` | 54.8 | 27.3 |
 | official baseline | `gpt-4.1-mini` | 23.2 | 9.8 |
 
 Read down the column and the model is worth 26.8 TGC points (61.9 → 88.7 with LARA);
