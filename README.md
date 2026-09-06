@@ -1,3 +1,4 @@
+<img width="720" height="405" alt="intro-map" src="https://github.com/user-attachments/assets/64563b03-4ee8-44e8-afb8-3376572cd00b" />
 
 
 # LARA — a multi-agent coding agent for AppWorld
