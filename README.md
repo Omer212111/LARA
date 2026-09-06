@@ -11,7 +11,6 @@ expense if they have no Venmo account"*, it discovers the right APIs, writes a p
 then writes and runs real code against those APIs until the world's database is in
 the state the task asked for.
 
-https://github.com/user-attachments/assets/d0790966-2f6c-40dd-8907-d411e012f1f4
 ---
 
 ## The problem
