@@ -166,7 +166,7 @@ on `test_challenge`, where tasks are longest and a single wrong API guess ends t
 > strong model is nearly self-sufficient (+10.5 TGC from the architecture); on the
 > hardest tasks the same strong model collapses without it and LARA rescues +73.8
 > points. Full paper:
-> [**Model Quality vs. the LARA Harness and Architecture**](docs/LARA_Model_vs_Architecture_Paper.pdf).
+> [**Model Quality vs. the LARA Harness and Architecture**](ablation-and-studies/LARA_Model_vs_Architecture_Paper.pdf).
 
 ---
 
@@ -221,9 +221,9 @@ which facts to carry forward instead of inventing its own bookkeeping.
 > two-stage design scores 73.3% against a knowledge-matched single agent's 42.2% on
 > the same paired task slice (p = 0.0043). Full paper:
 > [**Does Separating Planning from Execution Help LLM Agents Solve Multi-App
-> Tasks?**](docs/PLANNING_SEPARATION_PAPER_2026-09-06.md)
-> ([PDF](docs/PLANNING_SEPARATION_PAPER_2026-09-06.pdf)) · technical report:
-> [`docs/PLANNING_SEPARATION_ABLATION_2026-09-06.md`](docs/PLANNING_SEPARATION_ABLATION_2026-09-06.md)
+> Tasks?**](ablation-and-studies/PLANNING_SEPARATION_PAPER_2026-09-06.md)
+> ([PDF](ablation-and-studies/PLANNING_SEPARATION_PAPER_2026-09-06.pdf)) · technical report:
+> [`ablation-and-studies/PLANNING_SEPARATION_ABLATION_2026-09-06.md`](ablation-and-studies/PLANNING_SEPARATION_ABLATION_2026-09-06.md)
 
 ### 2. Swap the prompt per app, not per task
 
@@ -242,9 +242,9 @@ apps at once.
 > Executor sees, and how it is delivered, found that the *knowledge* matters
 > (64.4 → 82.2 TGC) while the *routing* does not — what per-step dispatch buys is
 > 2.44× lower token cost at equal accuracy. Full study:
-> [**Specialist-dispatch ablation**](docs/SPECIALIST_DISPATCH_ABLATION_2026-09-04.md)
-> ([PDF](docs/SPECIALIST_DISPATCH_ABLATION_2026-09-04.pdf)) · all results:
-> [`docs/RESULTS_SUMMARY.md`](docs/RESULTS_SUMMARY.md)
+> [**Specialist-dispatch ablation**](ablation-and-studies/SPECIALIST_DISPATCH_ABLATION_2026-09-04.md)
+> ([PDF](ablation-and-studies/SPECIALIST_DISPATCH_ABLATION_2026-09-04.pdf)) · all results:
+> [`ablation-and-studies/RESULTS_SUMMARY.md`](ablation-and-studies/RESULTS_SUMMARY.md)
 
 ### 3. Cut what does not pay for itself
 
