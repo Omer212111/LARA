@@ -168,16 +168,6 @@ on `test_challenge`, where tasks are longest and a single wrong API guess ends t
 
 ## How LARA works
 
-> 📄 **We also tested the two-agent split itself.** Is a dedicated Explorer stage
-> worth the engineering cost over one agent that plans and executes in a single loop?
-> Holding knowledge, tools, and step budget fixed as much as possible, the two-stage
-> design scores 73.3% against a knowledge-matched single agent's 42.2% on the same
-> paired task slice (p = 0.0043). Full paper:
-> [**Does Separating Planning from Execution Help LLM Agents Solve Multi-App
-> Tasks?**](docs/PLANNING_SEPARATION_PAPER_2026-09-06.md)
-> ([PDF](docs/PLANNING_SEPARATION_PAPER_2026-09-06.pdf)) · technical report:
-> [`docs/PLANNING_SEPARATION_ABLATION_2026-09-06.md`](docs/PLANNING_SEPARATION_ABLATION_2026-09-06.md)
-
 > 🎥 **[Watch the LARA explainer](https://github.com/user-attachments/assets/f0e58856-26b2-445d-bdbf-82caa714a229)** —
 > a short walkthrough of the pipeline end to end.
 
@@ -220,6 +210,16 @@ docs-reading pass before any code is written removes most of that class.
 
 The `IN:`/`OUT:` annotations declare data flow explicitly, so the Executor is told
 which facts to carry forward instead of inventing its own bookkeeping.
+
+> 📄 **We tested whether this split is actually worth it.** Is a dedicated Explorer
+> stage worth the engineering cost over one agent that plans and executes in a single
+> loop? Holding knowledge, tools, and step budget fixed as much as possible, the
+> two-stage design scores 73.3% against a knowledge-matched single agent's 42.2% on
+> the same paired task slice (p = 0.0043). Full paper:
+> [**Does Separating Planning from Execution Help LLM Agents Solve Multi-App
+> Tasks?**](docs/PLANNING_SEPARATION_PAPER_2026-09-06.md)
+> ([PDF](docs/PLANNING_SEPARATION_PAPER_2026-09-06.pdf)) · technical report:
+> [`docs/PLANNING_SEPARATION_ABLATION_2026-09-06.md`](docs/PLANNING_SEPARATION_ABLATION_2026-09-06.md)
 
 ### 2. Swap the prompt per app, not per task
 
