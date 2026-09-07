@@ -80,11 +80,15 @@ every variant was solved — much stricter, and the one that punishes inconsiste
 |---|---|---|---|---|---|
 | **LARA** | `claude-opus-4-7` | `test_normal` | 168 | **88.7** | **82.1** |
 | **LARA** | `claude-opus-4-7` | `test_challenge` | 417 | **85.6** | **77.0** |
+| LARA | `gpt-4.1-mini` | `test_normal` | 168 | 61.9 | 50.0 |
+| LARA | `gpt-4.1-mini` | `test_challenge` | 417 | 37.6 | 20.1 |
 
 Held-out test splits, one Executor attempt per task, scored with the official
 `appworld evaluate`. On `test_challenge` this places LARA **1st on the
-[AppWorld leaderboard](https://appworld.dev/appworld/leaderboard)** as of
-6 September 2026, 12.2 TGC points ahead of second place.
+[AppWorld leaderboard](https://appworld.dev/appworld/leaderboard)** with
+`claude-opus-4-7`, and **8th of 23** with `gpt-4.1-mini` — the same method, same
+code, submitted twice at different model tiers. Standings as of
+7 September 2026, 12.2 TGC points ahead of second place at the top.
 
 ### Against the official baseline
 
