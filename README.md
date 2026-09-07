@@ -172,7 +172,7 @@ on `test_challenge`, where tasks are longest and a single wrong API guess ends t
 
 ## How LARA works
 
-> 🎥 **[Watch the LARA explainer](https://github.com/user-attachments/assets/f0e58856-26b2-445d-bdbf-82caa714a229)** —
+> 🎥 **[Watch the LARA explainer](https://github.com/user-attachments/assets/3d0b010c-5d51-4d1d-b87f-69f446276b96)** —
 > a short walkthrough of the pipeline end to end.
 
 Four agents pass one shared state object around a
