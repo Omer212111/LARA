@@ -249,15 +249,24 @@ apps at once.
 ### 3. Cut what does not pay for itself
 
 The Reviewer diagnoses a wrong answer so the Executor can retry. It is **disabled**.
-
-Measured over 165 tasks, it fired 75 times and rescued 1. A retry costs a Reviewer
-call plus a full second Executor attempt — roughly 45% more compute for a 1.3%
-conversion rate. The leaderboard runs use exactly **one Executor attempt per task**
+The leaderboard runs use exactly **one Executor attempt per task**
 (`MAX_EXECUTOR_RUNS = 1`, `ENABLE_REVIEWER_RETRY = False`).
 
-The code is kept, and the measurement that closed it is recorded in
-[`config.py`](LARA-sub_agents/LARA/config.py), so the decision can be revisited if a
-retry mechanism ever demonstrates it converts on train/dev.
+> 📄 **We re-measured this properly.** Three arms — no retry, retry with a real
+> diagnosis, and a "blind-retry" control that gets a bare second attempt with no
+> diagnosis at all — each run twice on the same 45-task slice, same day. The
+> diagnosis converts a wrong first attempt 5/31 times against the blind control's
+> 1/21 (directional, not significant at this n), with **zero regressions in either
+> arm**. But pooled across repeats, arm B solves **zero additional tasks** over no
+> retry at **+1.46M tokens** — and every attempt-1 noise floor (up to 17.8 TGC
+> points between identical repeats) exceeds every between-arm effect measured. The
+> honest reading: the diagnosis mechanism itself shows a real, repeatable signal,
+> but it does not yet net out to a final-score win worth the retry's cost. Full
+> results: [`ablation-and-studies/REVIEWER_ABLATION_RESULTS_RAW.md`](ablation-and-studies/REVIEWER_ABLATION_RESULTS_RAW.md)
+> · sample diagnoses: [`ablation-and-studies/REVIEWER_ABLATION_DIAGNOSES.md`](ablation-and-studies/REVIEWER_ABLATION_DIAGNOSES.md)
+
+The code is kept, so the decision can be revisited if a retry mechanism ever
+demonstrates a net conversion gain on train/dev.
 
 ---
 
